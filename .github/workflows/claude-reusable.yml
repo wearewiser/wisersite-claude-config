@@ -22,7 +22,7 @@ jobs:
 
       - name: Install shared Claude config
         run: |
-          git clone https://github.com/wearewiser/wisersite-claude-config.git /tmp/wisersite-claude-config
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/wearewiser/wisersite-claude-config.git /tmp/wisersite-claude-config
           mkdir -p .claude/agents
           cp -r /tmp/wisersite-claude-config/agents/* .claude/agents/
 
