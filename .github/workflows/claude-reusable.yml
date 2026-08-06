@@ -1,0 +1,46 @@
+name: Claude Code
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install shared Claude config
+        run: |
+          git clone https://github.com/wearewiser/wisersite-claude-config.git /tmp/wisersite-claude-config
+          mkdir -p .claude/agents
+          cp -r /tmp/wisersite-claude-config/agents/* .claude/agents/
+
+      - name: Run Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          trigger_phrase: "@claude"
+          claude_args: "--model claude-sonnet-4-6"
+          settings: '{"permissions":{"allow":["Bash(gh pr comment*)","Bash(gh pr view*)","Bash(gh pr diff*)","Bash(gh pr list*)","Bash(git diff*)","Read(*)"]}}'
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in this repository.
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to get the diff and `gh pr view ${{ github.event.pull_request.number }} --json title,body,files` for context.
+            Be concise — maximum 5 bullet points total.
+            Flag only: (1) bugs that would break behaviour, (2) security issues, (3) clear violations of patterns already established in this repo.
+            Skip style nits, minor naming, and anything that works but could be marginally cleaner.
+            If you find issues, post a comment using `gh pr comment ${{ github.event.pull_request.number }} --body "..."` listing them as bullet points — one short sentence each, prefixed with the file and line number if relevant.
+            If you find nothing to flag, post a comment using `gh pr comment ${{ github.event.pull_request.number }} --body "✅ Looks good. No issues found."`
