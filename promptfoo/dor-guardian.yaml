@@ -1,0 +1,177 @@
+description: dor-guardian regression tests
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5-20251001
+    config:
+      max_tokens: 2000
+
+prompts:
+  - file://prompts/dor-guardian.json
+
+tests:
+  - description: "ticket with no AC returns NOT READY"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-001
+        Title: Build user login page
+        Status: To Do
+        Description: We need users to be able to log in to the platform.
+        Acceptance Criteria: None provided.
+        Dependencies: None listed.
+        Estimate: None.
+    assert:
+      - type: icontains
+        value: "NOT READY"
+      - type: icontains
+        value: "Acceptance Criteria"
+      - type: icontains
+        value: "FAIL"
+
+  - description: "ticket with AI features but no AI behaviour returns NOT READY"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-002
+        Title: Auto-generate job descriptions using Claude
+        Status: To Do
+        Description: >
+          Use Claude to generate job descriptions from a structured input form.
+          The feature should call the Claude API and return a draft description.
+        Acceptance Criteria:
+          - User can click Generate and receive a job description
+        Dependencies: Claude API access confirmed.
+        Estimate: 3 points
+    assert:
+      - type: icontains
+        value: "NOT READY"
+      - type: icontains
+        value: "AI Behaviour"
+
+  - description: "output always contains the required table and verdict format"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-003
+        Title: Update footer copyright year
+        Status: To Do
+        Description: Change the copyright year in the footer from 2024 to 2025.
+        Acceptance Criteria:
+          - Footer displays 2025 copyright year on all pages
+        Dependencies: None.
+        Estimate: 1 point
+    assert:
+      - type: icontains
+        value: "DoR CHECK"
+      - type: icontains
+        value: "VERDICT"
+      - type: icontains
+        value: "Acceptance Criteria"
+
+  - description: "fully defined ticket returns READY TO START"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-004
+        Title: Add location filter to job listings
+        Status: To Do
+        Description: Allow users to filter job listings by location using a dropdown.
+        Acceptance Criteria:
+          - Dropdown lists all available locations from the database
+          - Selecting a location filters the job listings in real time
+          - Selecting "All locations" resets the filter
+          - Filter persists on page refresh via query string
+          - Works on mobile and desktop
+        Dependencies: Locations collection already exists in Payload CMS - confirmed.
+        Design: Figma designs approved and linked - figma.com/file/abc123
+        API: GET /api/locations returns array of location objects - schema defined.
+        Data: No migration required - locations data already populated.
+        Permissions: No role restrictions - all authenticated users can filter.
+        AI Behaviour: N/A - no AI features.
+        NFRs: WCAG 2.2 AA required, mobile responsive, filter response under 200ms.
+        Technical Approach: Straightforward - no spike required.
+        Estimate: 2 points - agreed in sprint planning.
+        Risks: None identified.
+        DoD: Team aligned - feature complete when filter works end-to-end and designs match.
+    assert:
+      - type: icontains
+        value: "READY TO START"
+
+  - description: "UI ticket with no designs returns NOT READY"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-005
+        Title: Redesign the candidate pipeline view
+        Status: To Do
+        Description: Redesign the candidate pipeline view to match the new brand guidelines.
+        Acceptance Criteria:
+          - Pipeline view uses updated colours and typography
+          - Layout is responsive on mobile and desktop
+        Dependencies: None.
+        Design: Not yet provided - waiting on design team.
+        Estimate: 5 points
+    assert:
+      - type: icontains
+        value: "NOT READY"
+      - type: icontains
+        value: "Design"
+
+  - description: "complex ticket with no spike returns NOT READY"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-006
+        Title: Implement real-time candidate scoring using ML model
+        Status: To Do
+        Description: >
+          Integrate a machine learning model to score candidates in real time
+          as recruiters review applications. The model will be hosted externally
+          and called via API. This is a new pattern not used elsewhere in the codebase.
+        Acceptance Criteria:
+          - Recruiter sees a score (0-100) next to each candidate
+          - Score updates within 2 seconds of page load
+          - Score is calculated by the external ML API
+        Dependencies: ML API endpoint to be confirmed.
+        Estimate: 8 points
+        Technical Approach: No spike completed - approach not yet agreed.
+    assert:
+      - type: icontains
+        value: "NOT READY"
+      - type: icontains
+        value: "Technical Approach"
+
+  - description: "non-UI ticket correctly marks Design as N/A"
+    vars:
+      user_message: |
+        Please evaluate this Jira ticket:
+
+        ID: WP23-TEST-007
+        Title: Add index to BigQuery candidate table
+        Status: To Do
+        Description: Add a composite index on candidate_id and created_at to improve query performance.
+        Acceptance Criteria:
+          - Index exists on the candidate table
+          - Query time for candidate lookups reduces by at least 50% (measured in dev)
+        Dependencies: BigQuery access confirmed.
+        Design: N/A - backend only, no UI changes.
+        API: N/A - no new endpoints.
+        Data: Index only - no schema changes, no migration required.
+        Permissions: N/A.
+        AI Behaviour: N/A.
+        NFRs: Query performance improvement measurable in dev environment.
+        Technical Approach: Straightforward - standard BigQuery index pattern.
+        Estimate: 1 point.
+        Risks: None.
+        DoD: Index in place and query performance verified.
+    assert:
+      - type: icontains
+        value: "N/A"
+      - type: not-icontains
+        value: "Design | FAIL"

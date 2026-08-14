@@ -1,0 +1,24 @@
+{
+  "name": "wisersite-claude-config",
+  "version": "1.0.0",
+  "description": "Shared Claude Code configuration for all Wiser repos. Single source of truth for agents and the Claude workflow.",
+  "main": "index.js",
+  "scripts": {
+    "test:agents": "promptfoo eval --config promptfoo/dor-guardian.yaml && promptfoo eval --config promptfoo/dod-guardian.yaml && promptfoo eval --config promptfoo/branch-guardian.yaml"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wearewiser/wisersite-claude-config.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wearewiser/wisersite-claude-config/issues"
+  },
+  "homepage": "https://github.com/wearewiser/wisersite-claude-config#readme",
+  "devDependencies": {
+    "promptfoo": "^0.122.0"
+  }
+}
