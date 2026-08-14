@@ -1,0 +1,74 @@
+description: branch-guardian regression tests
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5-20251001
+    config:
+      max_tokens: 500
+
+prompts:
+  - file://prompts/branch-guardian.json
+
+tests:
+  - description: "feature branch for a ticket includes correct prefix and ticket number"
+    vars:
+      user_message: |
+        I am about to start work on ticket WP23-13 (Set up prompt evaluation).
+        What branch should I create?
+    assert:
+      - type: icontains
+        value: "feature/WP23-13"
+
+  - description: "chore branch requires no ticket"
+    vars:
+      user_message: |
+        I want to update the README with new setup instructions. No Jira ticket for this.
+        What branch should I create?
+    assert:
+      - type: icontains
+        value: "chore/"
+      - type: not-icontains
+        value: "WP23"
+
+  - description: "feature branch with no ticket prompts for one"
+    vars:
+      user_message: |
+        I want to add a new dashboard widget. I do not have a ticket number.
+        Please create a branch for me.
+    assert:
+      - type: not-icontains
+        value: "git checkout -b feature/"
+      - type: icontains
+        value: "ticket"
+
+  - description: "fix branch for a ticket includes correct prefix and ticket number"
+    vars:
+      user_message: |
+        I am fixing a bug on ticket WP23-45 (Pagination breaks on mobile).
+        What branch should I create?
+    assert:
+      - type: icontains
+        value: "fix/WP23-45"
+
+  - description: "already on a valid feature branch proceeds without creating a new one"
+    vars:
+      user_message: |
+        Current branch: feature/WP23-13-set-up-prompt-evaluation
+        I want to start editing the promptfoo config file.
+    assert:
+      - type: not-icontains
+        value: "git checkout -b"
+      - type: not-icontains
+        value: "NOT READY"
+
+  - description: "working on main is blocked"
+    vars:
+      user_message: |
+        Current branch: main
+        I want to start editing the agent files.
+    assert:
+      - type: icontains
+        value: "main"
+      - type: icontains
+        value: "branch"
+      - type: not-icontains
+        value: "git checkout -b main"
