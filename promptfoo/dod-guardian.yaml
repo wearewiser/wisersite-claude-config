@@ -1,0 +1,172 @@
+description: dod-guardian regression tests
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5-20251001
+    config:
+      max_tokens: 2000
+
+prompts:
+  - file://prompts/dod-guardian.json
+
+tests:
+  - description: "uncommitted changes causes Development Complete to FAIL"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-010
+        Title: Add pagination to team listings
+        Acceptance Criteria:
+          - Team listing shows 10 items per page
+          - Pagination controls appear at the bottom
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-010-add-pagination
+        - Uncommitted changes: yes (3 modified files)
+        - Tests: passed
+        - Linter: passed
+    assert:
+      - type: icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "Development Complete"
+      - type: icontains
+        value: "FAIL"
+
+  - description: "clean state with passing checks returns DONE or PENDING MANUAL CHECKS"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-011
+        Title: Add pagination to team listings
+        Acceptance Criteria:
+          - Team listing shows 10 items per page
+          - Pagination controls appear at the bottom
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-011-add-pagination
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: passed
+    assert:
+      - type: not-icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "AUTOMATED RESULTS"
+
+  - description: "failing tests returns NOT DONE"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-013
+        Title: Add pagination to team listings
+        Acceptance Criteria:
+          - Team listing shows 10 items per page
+          - Pagination controls appear at the bottom
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-013-add-pagination
+        - Uncommitted changes: no
+        - Tests: failed (2 test failures in TeamList.spec.ts)
+        - Linter: passed
+    assert:
+      - type: icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "FAIL"
+
+  - description: "being on main branch returns NOT DONE"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-014
+        Title: Fix typo in navigation label
+        Acceptance Criteria:
+          - Navigation label reads "Dashboard" not "Dashbaord"
+
+        Automated check results:
+        - Branch: main
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: passed
+    assert:
+      - type: icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "Development Complete"
+
+  - description: "failing linter returns NOT DONE"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-015
+        Title: Add search to locations list
+        Acceptance Criteria:
+          - Search input filters locations in real time
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-015-add-location-search
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: failed (14 ESLint errors in LocationSearch.tsx)
+    assert:
+      - type: icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "FAIL"
+
+  - description: "AC not addressed returns NOT DONE"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-016
+        Title: Add export to CSV button to candidates table
+        Acceptance Criteria:
+          - Export button appears above the candidates table
+          - Clicking export downloads a CSV of all visible candidates
+          - CSV includes: name, email, stage, applied date
+          - Export works with active filters applied
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-016-csv-export
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: passed
+
+        Notes from developer: Button has been added and basic CSV download works.
+        Filters are not yet applied to the export - that part is not implemented.
+    assert:
+      - type: icontains
+        value: "NOT DONE"
+      - type: icontains
+        value: "Acceptance Criteria"
+
+  - description: "output always contains the required structure"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-012
+        Title: Fix typo in error message
+        Acceptance Criteria:
+          - Error message reads "Invalid email address" not "Invlaid email address"
+
+        Automated check results:
+        - Branch: fix/WP23-TEST-012-fix-typo
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: passed
+    assert:
+      - type: icontains
+        value: "DoD CHECK"
+      - type: icontains
+        value: "VERDICT"
+      - type: icontains
+        value: "AUTOMATED RESULTS"
+      - type: icontains
+        value: "Product Approval"
