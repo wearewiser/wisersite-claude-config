@@ -95,7 +95,8 @@ tests:
         NFRs: WCAG 2.2 AA required, mobile responsive, filter response under 200ms.
         Technical Approach: Straightforward - no spike required.
         Estimate: 2 points - agreed in sprint planning.
-        Risks: None identified.
+        Risks: Low risk overall. Risk identified - API response time could exceed 200ms if locations list grows significantly; mitigated by the 200ms NFR which will be validated in dev. Edge case identified - empty locations list should show "No locations available" message; added to ACs.
+        Assumptions: Locations data is stable and will not change mid-sprint. "All locations" is the default filter state on page load. All authenticated users have equal access to location data - no role-based filtering required.
         DoD: Team aligned - feature complete when filter works end-to-end and designs match.
     assert:
       - type: icontains
