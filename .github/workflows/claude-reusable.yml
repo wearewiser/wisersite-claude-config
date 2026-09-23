@@ -25,6 +25,10 @@ jobs:
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/wearewiser/wisersite-claude-config.git /tmp/wisersite-claude-config
           mkdir -p .claude/agents
           cp -r /tmp/wisersite-claude-config/agents/* .claude/agents/
+          if [ -d /tmp/wisersite-claude-config/docs/ADR ]; then
+            mkdir -p .claude/adr
+            cp -r /tmp/wisersite-claude-config/docs/ADR/* .claude/adr/
+          fi
 
       - name: Run Claude
         uses: anthropics/claude-code-action@v1
