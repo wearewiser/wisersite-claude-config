@@ -104,3 +104,13 @@ jobs:
 ```
 
 3. Done — CI handles everything automatically from there.
+
+---
+
+## Adding a new cross-repo ADR
+
+New Wiser-wide architecture decisions land in `docs/ADR/`. Follow the existing numbering (increment from the last file) and the format defined in `0000-use-adrs.md`.
+
+Once merged to `main`, every dev's next `claude` launch picks it up automatically via the shell wrapper `git pull`. Every downstream CI run picks it up on its next PR trigger, no consumer-side change required.
+
+Repo-scoped decisions (internal to a single service, e.g. response-shape contracts, module boundaries within one repo) stay in that service's own `docs/ADR/`, not here. See `0000-use-adrs.md` for the scope boundary.
