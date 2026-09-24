@@ -1,6 +1,6 @@
 # wisersite-claude-config
 
-Shared Claude Code configuration for all Wiser repos. Single source of truth for agents and the Claude workflow.
+Shared Claude Code configuration for all Wiser repos. Single source of truth for agents, user-invoked skills, and the Claude workflow.
 
 ## What's in here
 
@@ -12,6 +12,10 @@ wisersite-claude-config/
 │   ├── dor-guardian.md
 │   ├── secrets-guardian.md
 │   └── ticket-planner.md
+├── .claude/skills/                  # user-invoked skills shared across repos
+│   └── user-story-writer/
+│       ├── SKILL.md
+│       └── data-mapping/            # static copy of Wiser Data Brief tabs
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews
@@ -24,13 +28,18 @@ wisersite-claude-config/
 
 ### Locally
 
-Claude Code discovers agents by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, any agents placed at `~/Projects/Wiser/.claude/agents/` are discovered for all repos inside that folder — without affecting other projects on your machine.
+Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates `~/Projects/Wiser/.claude/agents/` as a **symlink** pointing directly at this repo's `agents/` folder. It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`. This means your agents are always up to date with no manual steps.
+`setup.sh` creates two symlinks under `~/Projects/Wiser/.claude/`:
+
+- `agents/` -> this repo's `agents/` folder
+- `skills/` -> this repo's `.claude/skills/` folder
+
+It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents and skills are always up to date with no manual steps.
 
 ### CI
 
-Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies the agents in before Claude runs. The files exist only for the duration of that job — nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
+Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies the agents in before Claude runs. Skills are not copied to CI; they are user-invoked (via slash command or natural-language request), not something CI needs. The files exist only for the duration of that job; nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
 
 ---
 
@@ -42,10 +51,10 @@ Each repo has a thin `claude.yml` that calls the reusable workflow in this repo 
 git clone https://github.com/wearewiser/wisersite-claude-config.git ~/Projects/Wiser/wisersite-claude-config
 ```
 
-2. If `~/Projects/Wiser/.claude/agents/` already exists as a real folder, delete it first:
+2. If `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` already exists as a real folder, delete it first:
 
 ```bash
-rm -rf ~/Projects/Wiser/.claude/agents
+rm -rf ~/Projects/Wiser/.claude/agents ~/Projects/Wiser/.claude/skills
 ```
 
 3. Run the setup script:
@@ -61,7 +70,7 @@ cd ~/Projects/Wiser/wisersite-claude-config
 source ~/.zshrc
 ```
 
-That's it. Agents are now scoped to Wiser and will update automatically every time you run `claude`.
+That's it. Agents and skills are now scoped to Wiser and will update automatically every time you run `claude`.
 
 ---
 
@@ -92,3 +101,30 @@ jobs:
 ```
 
 3. Done — CI handles everything automatically from there.
+
+---
+
+## Using shared skills
+
+Skills in `.claude/skills/` are **user-invoked**, not auto-loaded. In any Claude Code session under `~/Projects/Wiser/`, invoke a skill by its slash command (e.g. `/user-story-writer`) or by natural-language request ("use the user-story-writer skill to...").
+
+### user-story-writer
+
+Drafts, amends, splits, or tidies up Wiser user stories from mixed source material: Claude Design canvases, Jira tickets, screenshots, meeting notes, transcripts, and requirement docs. Produces DoR-aligned Given/When/Then acceptance criteria with source traceability. Writes to Jira only on explicit user approval. See `.claude/skills/user-story-writer/SKILL.md` for full behaviour.
+
+**Per-user prerequisites:**
+
+- Atlassian MCP configured and authenticated. Part of the standard Wiser Claude Code rig; re-authenticate periodically via `/mcp` when the OAuth token expires.
+- `claude_design` MCP, only required when a Claude Design canvas is in your source material. Install once per user:
+
+```bash
+claude mcp add --transport http claude_design https://api.anthropic.com/v1/design/mcp
+```
+
+Then run `/mcp` inside a Claude Code session, select `claude_design`, and complete the OAuth flow. Skip this if you never feed canvases to the skill.
+
+---
+
+## Adding a new skill
+
+New skills land in `.claude/skills/<skill-name>/SKILL.md`. Follow Claude Code's SKILL.md conventions: name and description in frontmatter, clear invocation criteria, one directory per skill. Once merged to `main`, every dev's next `claude` launch picks it up automatically via the shell wrapper `git pull`. Skills are not distributed to CI.
