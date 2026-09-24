@@ -9,13 +9,22 @@ Turn raw project context into Wiser-standard user stories that pass the Definiti
 
 ## Prerequisites
 
-Before this skill can be used, each user must have:
+Two prerequisites are required for every run of this skill. A third is required only when the source material references a Claude Design canvas.
 
-1. **`claude_design` MCP installed and authenticated.** Install once per user with `claude mcp add --transport http claude_design https://api.anthropic.com/v1/design/mcp`, then authenticate by running `/mcp` inside a Claude Code session, selecting `claude_design`, and completing the OAuth flow. Confirms the Claude Code CLI can read `.dc.html` artboards directly from Claude Design canvases.
-2. **Atlassian MCP available** (installed at team level, already in place across the Wiser rig). Used to fetch existing Jira tickets, search siblings, and create/edit tickets on explicit approval.
-3. **The Wiser data-mapping reference** committed alongside this skill at `.claude/skills/user-story-writer/data-mapping/`. Start with `data-mapping/README.md` to pick the right tab file. Used for the Data bullet in Technical notes.
+### Always required
 
-If any of these are missing, say so and stop; do not fabricate access.
+Check both before you start work. If either is missing, say so and stop.
+
+1. **Atlassian MCP available** (installed at team level, already in place across the Wiser rig). Used to fetch existing Jira tickets, search siblings, and create/edit tickets on explicit approval.
+2. **The Wiser data-mapping reference** committed alongside this skill at `.claude/skills/user-story-writer/data-mapping/`. Start with `data-mapping/README.md` to pick the right tab file. Used for the Data bullet in Technical notes.
+
+### Required only when a canvas is in scope
+
+Check this after Step 1 (Gather context) once you know whether a Claude Design canvas is actually referenced in the source material. If a canvas is referenced and this is missing, say so and stop; if no canvas is in scope, skip this check entirely.
+
+3. **`claude_design` MCP installed and authenticated.** Install once per user with `claude mcp add --transport http claude_design https://api.anthropic.com/v1/design/mcp`, then authenticate by running `/mcp` inside a Claude Code session, selecting `claude_design`, and completing the OAuth flow. Confirms the Claude Code CLI can read `.dc.html` artboards directly from Claude Design canvases.
+
+Do not fabricate access to any of these.
 
 ## Core principle
 
