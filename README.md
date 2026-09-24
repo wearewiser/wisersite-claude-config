@@ -1,6 +1,6 @@
 # wisersite-claude-config
 
-Shared Claude Code configuration for all Wiser repos. Single source of truth for agents, user-invoked skills, and the Claude workflow.
+Shared Claude Code configuration for all Wiser repos. Single source of truth for agents, user-invoked skills, cross-repo ADRs, and the Claude workflow.
 
 ## What's in here
 
@@ -16,6 +16,10 @@ wisersite-claude-config/
 │   └── user-story-writer/
 │       ├── SKILL.md
 │       └── data-mapping/            # static copy of Wiser Data Brief tabs
+├── docs/ADR/                        # Wiser-wide architecture decisions
+│   ├── 0000-use-adrs.md
+│   ├── 0001-llm-path-vertex-hosted-claude.md
+│   └── 0002-gcp-cloud-functions-for-ingestion.md
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews
@@ -30,16 +34,19 @@ wisersite-claude-config/
 
 Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates two symlinks under `~/Projects/Wiser/.claude/`:
+`setup.sh` creates three symlinks under `~/Projects/Wiser/.claude/`:
 
 - `agents/` -> this repo's `agents/` folder
 - `skills/` -> this repo's `.claude/skills/` folder
+- `adr/` -> this repo's `docs/ADR/` folder
 
-It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents and skills are always up to date with no manual steps.
+It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, and ADRs are always up to date with no manual steps.
+
+Repos that want Claude to consult the shared ADRs should point at them from their `CLAUDE.md`, e.g. `Cross-repo ADRs: ~/Projects/Wiser/.claude/adr/`. ADRs are read on demand (not auto-loaded), so this only matters for repos where cross-cutting decisions are relevant.
 
 ### CI
 
-Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies the agents in before Claude runs. Skills are not copied to CI; they are user-invoked (via slash command or natural-language request), not something CI needs. The files exist only for the duration of that job; nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
+Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies `agents/` into `.claude/agents/` and `docs/ADR/` into `.claude/adr/` before Claude runs. Skills are not copied to CI; they are user-invoked (via slash command or natural-language request), not something CI needs. The files exist only for the duration of that job; nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
 
 ---
 
@@ -51,10 +58,10 @@ Each repo has a thin `claude.yml` that calls the reusable workflow in this repo 
 git clone https://github.com/wearewiser/wisersite-claude-config.git ~/Projects/Wiser/wisersite-claude-config
 ```
 
-2. If `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` already exists as a real folder, delete it first:
+2. If `~/Projects/Wiser/.claude/agents/`, `~/Projects/Wiser/.claude/skills/`, or `~/Projects/Wiser/.claude/adr/` already exists as a real folder, delete it first:
 
 ```bash
-rm -rf ~/Projects/Wiser/.claude/agents ~/Projects/Wiser/.claude/skills
+rm -rf ~/Projects/Wiser/.claude/agents ~/Projects/Wiser/.claude/skills ~/Projects/Wiser/.claude/adr
 ```
 
 3. Run the setup script:
@@ -70,7 +77,7 @@ cd ~/Projects/Wiser/wisersite-claude-config
 source ~/.zshrc
 ```
 
-That's it. Agents and skills are now scoped to Wiser and will update automatically every time you run `claude`.
+That's it. Agents, skills, and ADRs are now scoped to Wiser and will update automatically every time you run `claude`.
 
 ---
 
@@ -128,3 +135,13 @@ Then run `/mcp` inside a Claude Code session, select `claude_design`, and comple
 ## Adding a new skill
 
 New skills land in `.claude/skills/<skill-name>/SKILL.md`. Follow Claude Code's SKILL.md conventions: name and description in frontmatter, clear invocation criteria, one directory per skill. Once merged to `main`, every dev's next `claude` launch picks it up automatically via the shell wrapper `git pull`. Skills are not distributed to CI.
+
+---
+
+## Adding a new cross-repo ADR
+
+New Wiser-wide architecture decisions land in `docs/ADR/`. Follow the existing numbering (increment from the last file) and the format defined in `0000-use-adrs.md`.
+
+Once merged to `main`, every dev's next `claude` launch picks it up automatically via the shell wrapper `git pull`. Every downstream CI run picks it up on its next PR trigger, no consumer-side change required.
+
+Repo-scoped decisions (internal to a single service, e.g. response-shape contracts, module boundaries within one repo) stay in that service's own `docs/ADR/`, not here. See `0000-use-adrs.md` for the scope boundary.
