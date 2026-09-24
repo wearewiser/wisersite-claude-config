@@ -15,8 +15,7 @@ wisersite-claude-config/
 ├── docs/ADR/                        # Wiser-wide architecture decisions
 │   ├── 0000-use-adrs.md
 │   ├── 0001-llm-path-vertex-hosted-claude.md
-│   ├── 0002-gcp-cloud-functions-for-ingestion.md
-│   └── 0003-nestjs-for-backend-services.md
+│   └── 0002-gcp-cloud-functions-for-ingestion.md
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews

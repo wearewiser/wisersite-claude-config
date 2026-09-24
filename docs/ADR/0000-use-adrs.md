@@ -9,7 +9,7 @@ date: 2026-09-16
 
 Wiser is a poly-repo estate (plugin, data api layer, roadmap, ingestion Cloud Functions, cluster infra, shared Claude config, etc.). Decisions that affect more than one repo (framework choice, LLM path, ingestion pipeline shape, cross-repo interfaces) have no natural home in any single repo's `docs/ADR/` folder.
 
-The `wisersite-data-api-layer/docs/ADR/` folder previously hosted some of these cross-cutting decisions (e.g. "NestJS for all new Wiser backend microservices", "GCP Cloud Functions for ATS/analytics ingestion") because it was where the pattern was first adopted. That service is being wound down, so those decisions need a home that outlives it.
+The `wisersite-data-api-layer/docs/ADR/` folder previously hosted some of these cross-cutting decisions (e.g. "GCP Cloud Functions for ATS/analytics ingestion") because it was where the pattern was first adopted. That service is being wound down, so those decisions need a home that outlives it.
 
 ## Decision
 
@@ -27,5 +27,5 @@ Claude checks this folder before making new decisions to avoid violating agreed 
 ## Consequences
 
 - New cross-repo ADRs land here; new repo-scoped ADRs stay in their own repo.
-- Content for 0002 (GCP Cloud Functions ingestion) and 0003 (NestJS for new backend services) was originally recorded in `wisersite-data-api-layer/docs/ADR/` and has been re-homed here as the authoritative Wiser-wide copies. The api-layer files are left in place untouched; they will disappear naturally when that repo is retired. 0001 in the api layer (endpoints return current + previous period) is api-layer-specific and stays there.
+- Content for 0002 (GCP Cloud Functions ingestion) was originally recorded in `wisersite-data-api-layer/docs/ADR/` and has been re-homed here as the authoritative Wiser-wide copy. The api-layer file is left in place untouched; it will disappear naturally when that repo is retired. 0001 in the api layer (endpoints return current + previous period) is api-layer-specific and stays there.
 - Any Claude session in any Wiser repo can reach these ADRs via the symlinked `~/Projects/Wiser/.claude/adr/` folder (local) or `.claude/adr/` (CI).
