@@ -11,7 +11,7 @@ Turn raw project context into Wiser-standard user stories that pass the Definiti
 
 Before this skill can be used, each user must have:
 
-1. **`claude_design` MCP installed** and `/design-login` completed once. Confirms the Claude Code CLI can read `.dc.html` artboards directly from Claude Design canvases.
+1. **`claude_design` MCP installed and authenticated.** Install once per user with `claude mcp add --transport http claude_design https://api.anthropic.com/v1/design/mcp`, then authenticate by running `/mcp` inside a Claude Code session, selecting `claude_design`, and completing the OAuth flow. Confirms the Claude Code CLI can read `.dc.html` artboards directly from Claude Design canvases.
 2. **Atlassian MCP available** (installed at team level, already in place across the Wiser rig). Used to fetch existing Jira tickets, search siblings, and create/edit tickets on explicit approval.
 3. **The Wiser data-mapping reference** committed alongside this skill at `.claude/skills/user-story-writer/data-mapping/`. Start with `data-mapping/README.md` to pick the right tab file. Used for the Data bullet in Technical notes.
 
