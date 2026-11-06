@@ -252,10 +252,10 @@ tests:
         - Author: jdoe
         - Branch: feature/WP23-TEST-121-candidates-csv into develop
         - Draft: no · CI: passing · Approvals: 0 · Merge state: CLEAN
-        - Changed: 2 files, +16 -0, none generated
+        - Changed: 3 files, +31 -0, none generated
 
         ## PR description
-        Approach: build the CSV from the loaded rows.
+        Approach: an Export button builds the CSV from the loaded rows.
         Deliberate deviations: email is left out of the CSV. Candidate email is personal data, and golden rule 3 of the guardrails says we never forward candidate personal data. I've asked Patrick to amend AC2 on the ticket.
         Out of scope: none.
 
@@ -266,10 +266,30 @@ tests:
         - jdoe (5 Nov): Leaving email out of the export. It's candidate personal data and the guardrails don't allow us to forward it. Patrick, can you amend AC2?
 
         ## Diff
+        diff --git a/src/components/ExportButton.tsx b/src/components/ExportButton.tsx
+        new file mode 100644
+        +++ b/src/components/ExportButton.tsx
+        @@ -0,0 +1,15 @@
+        +import type { CandidateRow } from '../types'
+        +import { toCsv } from '../utils/csv'
+        +
+        +export function ExportButton({ rows }: { rows: CandidateRow[] }) {
+        +  const download = () => {
+        +    const blob = new Blob([toCsv(rows)], { type: 'text/csv' })
+        +    const url = URL.createObjectURL(blob)
+        +    const a = document.createElement('a')
+        +    a.href = url
+        +    a.download = 'candidates.csv'
+        +    a.click()
+        +    URL.revokeObjectURL(url)
+        +  }
+        +  return <button onClick={download}>Export</button>
+        +}
         diff --git a/src/utils/csv.ts b/src/utils/csv.ts
         new file mode 100644
         +++ b/src/utils/csv.ts
-        @@ -0,0 +1,8 @@
+        @@ -0,0 +1,9 @@
+        +import type { CandidateRow } from '../types'
         +const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
         +
         +export function toCsv(rows: CandidateRow[]): string {
@@ -295,10 +315,17 @@ tests:
         value: "Needs human confirmation"
       - type: icontains
         value: "email"
+      # The declared email deviation must not appear under Blockers. Other real findings may.
       - type: javascript
         value: |
-          const m = output.match(/Summary[:*\s]*(\d+)\s+blockers?/i);
-          return m !== null && Number(m[1]) === 0;
+          const start = output.search(/^#+[^\n]*Blockers/im);
+          if (start < 0) return true;
+          const rest = output.slice(start);
+          const nl = rest.indexOf('\n');
+          const after = nl < 0 ? '' : rest.slice(nl + 1);
+          const next = after.search(/^#{1,3} /m);
+          const section = next < 0 ? after : after.slice(0, next);
+          return !/email/i.test(section);
 
   - description: "a clean PR has no blockers and leftover debug logging is auto-fixable"
     vars:
