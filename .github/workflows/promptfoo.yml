@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - 'agents/**'
+      - 'promptfoo/**'
   pull_request:
     paths:
       - 'agents/**'
+      - 'promptfoo/**'
 
 jobs:
   promptfoo:
@@ -34,5 +36,10 @@ jobs:
 
       - name: Run branch-guardian tests
         run: npx promptfoo eval --config promptfoo/branch-guardian.yaml
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run pr-reviewer tests
+        run: npx promptfoo eval --config promptfoo/pr-reviewer.yaml
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

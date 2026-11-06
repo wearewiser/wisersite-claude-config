@@ -2,7 +2,7 @@
 
 PromptFoo test suite for the Wiser Claude agents. Catches quality drift when agent prompts change or the underlying model is updated.
 
-Runs automatically on any push or pull request that modifies a file in `agents/`.
+Runs automatically on any push or pull request that modifies a file in `agents/` or `promptfoo/`.
 
 ## Tests
 
@@ -26,6 +26,16 @@ Runs automatically on any push or pull request that modifies a file in `agents/`
 18. Fix branch for a ticket includes correct prefix and ticket number - branch-guardian
 19. Already on a valid feature branch proceeds without creating a new one - branch-guardian
 20. Working on main is blocked - branch-guardian
+21. A bug on a sensitive path is a blocker, with details apart and full review depth - pr-reviewer
+22. Claims about the work in the caller's message are ignored - pr-reviewer
+23. An unexplained change outside the ticket is flagged as drift - pr-reviewer
+24. A declared deviation goes to human confirmation, not a blocker - pr-reviewer
+25. A clean PR has no blockers and leftover debug logging is auto-fixable - pr-reviewer
+26. Fix mode on someone else's PR falls back to report mode - pr-reviewer
+27. A PR with no ticket says intent wasn't checked - pr-reviewer
+28. A very large PR is recommended for a split - pr-reviewer
+
+Every pr-reviewer test also checks the report has its Summary, review depth and "Where to look" sections. Unlike the other suites, the pr-reviewer prompt isn't a copy: `prompts/pr-reviewer.js` reads `agents/pr-reviewer.md` at run time, so the tests always cover the current agent.
 
 ## Running locally
 
@@ -47,4 +57,5 @@ Or run a single agent suite:
 npx promptfoo eval --config promptfoo/dor-guardian.yaml --env-file .env
 npx promptfoo eval --config promptfoo/dod-guardian.yaml --env-file .env
 npx promptfoo eval --config promptfoo/branch-guardian.yaml --env-file .env
+npx promptfoo eval --config promptfoo/pr-reviewer.yaml --env-file .env
 ```
