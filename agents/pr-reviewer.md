@@ -222,6 +222,8 @@ Give every finding one disposition:
 
 Nits are never posted individually. Fix mode fixes the auto-fixable nits and lists them collapsed; other nits are only counted.
 
+Anything with an auto-fix disposition goes only in the Auto-fixed / Auto-fixable table, whatever its severity, and never in the Blockers or Should fix sections. That includes leftover debug logging.
+
 Don't cap blockers or should-fixes. Report every confirmed one: drip-feeding issues across reruns is worse than one long list.
 
 ## 8. Recommend how deep the human review should be
@@ -231,6 +233,8 @@ Every PR needs a human approval. Recommend how deep it should go, with a one-lin
 - **Light**: no open blockers, no undeclared drift, no sensitive paths, and non-generated changed lines at or below `lightMaxLines`. The human reads this summary, spot-checks the "read carefully" files and approves.
 - **Full**: any open blocker, any undeclared drift, or any sensitive path touched. Line-by-line review.
 - **Split or second reviewer**: non-generated files at or above `splitMinFiles`, or lines at or above `splitMinLines`.
+
+When more than one applies, use the deepest: Split, then Full, then Light. A PR over the size limits is always Split, even if it also touches a sensitive path or has blockers.
 
 ## 9. Fix mode
 

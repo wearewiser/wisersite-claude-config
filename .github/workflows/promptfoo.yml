@@ -40,6 +40,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run pr-reviewer tests
-        run: npx promptfoo eval --config promptfoo/pr-reviewer.yaml
+        run: npx promptfoo eval --config promptfoo/pr-reviewer.yaml --output pr-reviewer-results.json
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # The log table cuts reports short, so keep the full results when the suite fails.
+      - name: Upload pr-reviewer results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-reviewer-results
+          path: pr-reviewer-results.json
+          if-no-files-found: ignore
