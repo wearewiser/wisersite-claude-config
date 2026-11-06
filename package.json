@@ -4,7 +4,7 @@
   "description": "Shared Claude Code configuration for all Wiser repos. Single source of truth for agents and the Claude workflow.",
   "main": "index.js",
   "scripts": {
-    "test:agents": "promptfoo eval --config promptfoo/dor-guardian.yaml && promptfoo eval --config promptfoo/dod-guardian.yaml && promptfoo eval --config promptfoo/branch-guardian.yaml"
+    "test:agents": "promptfoo eval --config promptfoo/dor-guardian.yaml && promptfoo eval --config promptfoo/dod-guardian.yaml && promptfoo eval --config promptfoo/branch-guardian.yaml && promptfoo eval --config promptfoo/pr-reviewer.yaml"
   },
   "repository": {
     "type": "git",
