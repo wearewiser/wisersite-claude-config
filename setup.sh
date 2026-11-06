@@ -77,7 +77,7 @@ echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
 WISER_CLAUDE_MD="$HOME/Projects/Wiser/CLAUDE.md"
 GUARDRAILS_IMPORT="@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md"
 
-if [ -f "$WISER_CLAUDE_MD" ] && grep -qF "$GUARDRAILS_IMPORT" "$WISER_CLAUDE_MD"; then
+if [ -f "$WISER_CLAUDE_MD" ] && grep -qxF "$GUARDRAILS_IMPORT" "$WISER_CLAUDE_MD"; then
   echo "Guardrails import already present in $WISER_CLAUDE_MD, skipping."
 elif [ -f "$WISER_CLAUDE_MD" ]; then
   printf '\n%s\n' "$GUARDRAILS_IMPORT" >> "$WISER_CLAUDE_MD"
