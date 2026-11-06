@@ -35,7 +35,7 @@ Runs automatically on any push or pull request that modifies a file in `agents/`
 27. A PR with no ticket says intent wasn't checked - pr-reviewer
 28. A very large PR is recommended for a split - pr-reviewer
 
-Every pr-reviewer test also checks the report has its Summary, review depth and "Where to look" sections. Unlike the other suites, the pr-reviewer prompt isn't a copy: `prompts/pr-reviewer.js` reads `agents/pr-reviewer.md` at run time, so the tests always cover the current agent.
+Every pr-reviewer test also checks the report has its Summary, review depth and "Where to look" sections. Unlike the other suites, the pr-reviewer prompt isn't a copy: `prompts/pr-reviewer.js` reads `agents/pr-reviewer.md` at run time, so the tests always cover the current agent. It also runs on Sonnet rather than Haiku: the agent's prompt is long and runs on Opus in real use, and Haiku failed different tests on each run.
 
 ## Running locally
 

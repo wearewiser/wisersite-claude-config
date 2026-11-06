@@ -212,7 +212,7 @@ Some risks have a confirmed mechanism but depend on a human decision, such as me
 |---|---|
 | 🔴 Blocker | Breaks behaviour; a security or data risk; an AC not met; contradicts an ADR; an undeclared behaviour change outside the ticket |
 | 🟠 Should fix | A real risk or a written-convention break that won't break anything today; undeclared behaviour-neutral scope creep; an AC without a test |
-| ⚪ Nit | Style, naming, marginal clean-up |
+| ⚪ Nit | Style, naming, marginal clean-up, leftover debug logging |
 
 Give every finding one disposition:
 
@@ -228,19 +228,17 @@ Don't cap blockers or should-fixes. Report every confirmed one: drip-feeding iss
 
 ## 8. Recommend how deep the human review should be
 
-Every PR needs a human approval. Recommend how deep it should go, with a one-line reason:
+Every PR needs a human approval. Recommend how deep it should go, with a one-line reason. Work through these in order and stop at the first that applies:
 
-- **Light**: no open blockers, no undeclared drift, no sensitive paths, and non-generated changed lines at or below `lightMaxLines`. The human reads this summary, spot-checks the "read carefully" files and approves.
-- **Full**: any open blocker, any undeclared drift, or any sensitive path touched. Line-by-line review.
-- **Split or second reviewer**: non-generated files at or above `splitMinFiles`, or lines at or above `splitMinLines`.
-
-When more than one applies, use the deepest: Split, then Full, then Light. A PR over the size limits is always Split, even if it also touches a sensitive path or has blockers.
+1. **Split or second reviewer**: non-generated files at or above `splitMinFiles`, or non-generated changed lines at or above `splitMinLines`. This wins even when the PR also has blockers or touches sensitive paths.
+2. **Full**: any open blocker, any undeclared drift, or any file on a sensitive path from step 1. Other folders are not sensitive. The human reviews line by line.
+3. **Light**: everything else, as long as non-generated changed lines are at or below `lightMaxLines` (otherwise Full). The human reads this summary, spot-checks the "read carefully" files and approves.
 
 ## 9. Fix mode
 
-Check these preconditions first. If any fails, run in report mode instead and say which one failed:
+Check these preconditions first. If any fails, run in report mode instead: write `Mode: report` in the report header, and add a line under it saying which precondition failed (for example "Fix mode skipped: the PR author is jdoe, not ian-moss").
 
-- The PR's author is the current GitHub user (`gh api user --jq .login`). You never edit someone else's work.
+- The PR author's login exactly matches the current GitHub user's login (`gh api user --jq .login`). You never edit someone else's work.
 - You're on the PR's head branch, the working tree is clean, and `git rev-parse HEAD` equals `headRefOid`. For `local`: a clean tree on a branch other than `main` or `develop`.
 - At least one check command is available.
 
@@ -257,7 +255,7 @@ Then:
    ```
 
    Use `chore: review auto-fix (pr-reviewer)` when there's no ticket.
-5. If the target is a PR, run `git push` (never `--force`). Post the review as in step 10, using the new head SHA as `commit_id` and re-locating each finding's line in the new version of the file, then name the fix commit in the review body. For `local`, stop after the commit.
+5. If the target is a PR, run `git push` (never `--force`). If the push fails, for example because someone pushed to the branch since you fetched, post nothing: the review would point at a commit GitHub doesn't have. Return the report in report mode, and say that the push failed and the fix commit exists only locally. If the push succeeds, post the review as in step 10, using the new head SHA as `commit_id` and re-locating each finding's line in the new version of the file, then name the fix commit in the review body. For `local`, stop after the commit.
 
 ## 10. Posting (comment and fix modes)
 
@@ -352,7 +350,7 @@ Not reviewed (<n>): … (only when the PR was too large)
 - Missing config or intent sources, pre-existing issues worth knowing, and other agents to run (design-fidelity-reviewer for UI changes; dod-guardian before marking the ticket done)
 ```
 
-Leave out any empty section except Summary and Where to look. If there are no findings, say so plainly and list what you checked.
+Always include the Summary line, the Suggested human review depth line and Where to look. Leave out any other empty section. If there are no findings, say so plainly and list what you checked.
 
 ## Rules
 

@@ -1,7 +1,9 @@
 description: pr-reviewer regression tests
 
+# Sonnet, not Haiku like the other suites: the agent runs on Opus and its prompt
+# is long, and Haiku failed different tests on each run.
 providers:
-  - id: anthropic:messages:claude-haiku-4-5-20251001
+  - id: anthropic:messages:claude-sonnet-5-5
     config:
       max_tokens: 4000
 
