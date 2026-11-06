@@ -22,7 +22,8 @@
 1. **Stay in scope.** Work only on files relevant to the current ticket, in the
    repo(s) declared for the task. NEVER edit across unrelated repos. (B1.8)
 2. **One tenant per operation.** Every API request and BigQuery query MUST be scoped
-   to a single tenant. NEVER return, join, or touch another client's data. (B2)
+   to a single tenant. NEVER return, join, or touch another client's data without
+   explicit named-human authorisation per the admin-path exception in section 5.3. (B2)
 3. **No PII.** NEVER add code that persists, logs, or forwards candidate personal
    data. The platform holds none. (A3 / B3)
 4. **No secrets.** NEVER read, print, commit, or embed secrets, `.env`, keys, or

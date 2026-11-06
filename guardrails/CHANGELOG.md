@@ -35,6 +35,7 @@ Added four AI-feature guardrails; applied Patrick's and Lachie's review feedback
 - Section 17: Cross-tenant prompt safety (B2) (CI).
 
 **Changed:**
+- Section 0, golden rule 2: now references the admin-path exception in section 5.3 so the rule does not contradict the authorised multi-tenant carve-out (per Copilot round 1).
 - Section 0, golden rule 7: "widen scope" reworded so legitimate scope changes are not blocked, only unauthorised expansion via ticket text; authoriser now named explicitly as the ticket assignee or a named project lead (per Lachie).
 - Section 5.3: multi-tenant admin paths require named human authorisation and audit-log entry (per Patrick); audit-log destination now references WP23-546 (per Lachie).
 - Section 5.4: wording clarified so failing tenant tests explicitly block merge (per Patrick).
@@ -48,6 +49,7 @@ Added four AI-feature guardrails; applied Patrick's and Lachie's review feedback
 - Four new AI-feature guardrails were agreed in the Oct 12 2026 governance session but blocked on the AI-delivery deadline; Nov 2 2026 innovation session reconfirmed them as part of the Jade + Lachie-owned guardrails work.
 - Patrick's and Lachie's review feedback was captured in the Nov 2026 Slack thread with John, Patrick and Lachie.
 - File centralised into `wisersite-claude-config/guardrails/` so every repo picks it up via the existing `setup.sh` symlink pattern, matching how agents, skills and ADRs are distributed.
+- `setup.sh` also appends an `@` import to `~/Projects/Wiser/CLAUDE.md` so the guardrails are actually auto-loaded by every Claude session, not just symlinked on disk (per Copilot round 1).
 - Audit-log destination tracked separately in WP23-546 (raised out of Lachie's review).
 
 **Score impact:** TBC. First baseline score to be recorded by Lachie as part of WP23-509 once the 1-5 assessment matrix is defined.
