@@ -7,10 +7,11 @@ WISER_CLAUDE_DIR="$HOME/Projects/Wiser/.claude"
 AGENTS_LINK="$WISER_CLAUDE_DIR/agents"
 SKILLS_LINK="$WISER_CLAUDE_DIR/skills"
 ADR_LINK="$WISER_CLAUDE_DIR/adr"
+GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
 ZSHRC="$HOME/.zshrc"
 
 SHELL_FUNCTION='
-# wisersite-claude-config: pull latest Wiser agents, skills, and ADRs before launching Claude
+# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude
 function claude() {
   git -C ~/Projects/Wiser/wisersite-claude-config pull --quiet
   command claude "$@"
@@ -56,6 +57,42 @@ fi
 
 ln -s "$REPO_DIR/docs/ADR" "$ADR_LINK"
 echo "Symlink created: $ADR_LINK -> $REPO_DIR/docs/ADR"
+
+# Create guardrails symlink (remove existing dir/link if present)
+if [ -L "$GUARDRAILS_LINK" ]; then
+  echo "Removing existing symlink at $GUARDRAILS_LINK"
+  rm "$GUARDRAILS_LINK"
+elif [ -d "$GUARDRAILS_LINK" ]; then
+  echo "Error: $GUARDRAILS_LINK exists as a real directory. Move or delete it first."
+  exit 1
+fi
+
+ln -s "$REPO_DIR/guardrails" "$GUARDRAILS_LINK"
+echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
+
+# Wire the guardrails into Claude sessions by importing them from the
+# Wiser project-level CLAUDE.md (auto-discovered by any session under
+# ~/Projects/Wiser/). The symlink above makes the file available on disk;
+# this import makes Claude actually load it.
+WISER_CLAUDE_MD="$HOME/Projects/Wiser/CLAUDE.md"
+GUARDRAILS_IMPORT="@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md"
+
+if [ -f "$WISER_CLAUDE_MD" ] && grep -qxF "$GUARDRAILS_IMPORT" "$WISER_CLAUDE_MD"; then
+  echo "Guardrails import already present in $WISER_CLAUDE_MD, skipping."
+elif [ -f "$WISER_CLAUDE_MD" ]; then
+  printf '\n%s\n' "$GUARDRAILS_IMPORT" >> "$WISER_CLAUDE_MD"
+  echo "Guardrails import appended to $WISER_CLAUDE_MD"
+else
+  cat > "$WISER_CLAUDE_MD" <<EOF
+# Wiser project CLAUDE.md
+
+Project-level guidance applied to every Wiser repo via Claude Code's
+hierarchical CLAUDE.md discovery.
+
+$GUARDRAILS_IMPORT
+EOF
+  echo "Created $WISER_CLAUDE_MD with the guardrails import."
+fi
 
 # Append shell function to ~/.zshrc if not already present
 if grep -q "wisersite-claude-config" "$ZSHRC" 2>/dev/null; then

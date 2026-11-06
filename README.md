@@ -20,6 +20,9 @@ wisersite-claude-config/
 │   ├── 0000-use-adrs.md
 │   ├── 0001-llm-path-vertex-hosted-claude.md
 │   └── 0002-gcp-cloud-functions-for-ingestion.md
+├── guardrails/                      # Wiser-wide development guardrails
+│   ├── DEVELOPMENT_GUARDRAILS.md
+│   └── CHANGELOG.md
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews
@@ -34,13 +37,16 @@ wisersite-claude-config/
 
 Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates three symlinks under `~/Projects/Wiser/.claude/`:
+`setup.sh` creates four symlinks under `~/Projects/Wiser/.claude/`:
 
 - `agents/` -> this repo's `agents/` folder
 - `skills/` -> this repo's `.claude/skills/` folder
 - `adr/` -> this repo's `docs/ADR/` folder
+- `guardrails/` -> this repo's `guardrails/` folder
 
-It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, and ADRs are always up to date with no manual steps.
+It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, ADRs, and guardrails are always up to date with no manual steps.
+
+Guardrails are a different shape from ADRs: they must load on **every** Claude session, not on demand. `setup.sh` therefore appends an `@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md` import line to `~/Projects/Wiser/CLAUDE.md` (creating that file if it does not exist). Claude Code's hierarchical CLAUDE.md discovery then surfaces the guardrails in every session started under `~/Projects/Wiser/`.
 
 Repos that want Claude to consult the shared ADRs should point at them from their `CLAUDE.md`, e.g. `Cross-repo ADRs: ~/Projects/Wiser/.claude/adr/`. ADRs are read on demand (not auto-loaded), so this only matters for repos where cross-cutting decisions are relevant.
 
