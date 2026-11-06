@@ -2,10 +2,12 @@ description: pr-reviewer regression tests
 
 # Sonnet, not Haiku like the other suites: the agent runs on Opus and its prompt
 # is long, and Haiku failed different tests on each run.
+# Sonnet's reasoning counts against max_tokens, so leave plenty of room: at 4000
+# one test spent 3,337 tokens reasoning and its report was cut off.
 providers:
   - id: anthropic:messages:claude-sonnet-5-5
     config:
-      max_tokens: 4000
+      max_tokens: 16000
 
 # Built from agents/pr-reviewer.md at run time, plus a short offline test harness.
 prompts:
