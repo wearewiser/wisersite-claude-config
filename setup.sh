@@ -7,10 +7,11 @@ WISER_CLAUDE_DIR="$HOME/Projects/Wiser/.claude"
 AGENTS_LINK="$WISER_CLAUDE_DIR/agents"
 SKILLS_LINK="$WISER_CLAUDE_DIR/skills"
 ADR_LINK="$WISER_CLAUDE_DIR/adr"
+GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
 ZSHRC="$HOME/.zshrc"
 
 SHELL_FUNCTION='
-# wisersite-claude-config: pull latest Wiser agents, skills, and ADRs before launching Claude
+# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude
 function claude() {
   git -C ~/Projects/Wiser/wisersite-claude-config pull --quiet
   command claude "$@"
@@ -56,6 +57,18 @@ fi
 
 ln -s "$REPO_DIR/docs/ADR" "$ADR_LINK"
 echo "Symlink created: $ADR_LINK -> $REPO_DIR/docs/ADR"
+
+# Create guardrails symlink (remove existing dir/link if present)
+if [ -L "$GUARDRAILS_LINK" ]; then
+  echo "Removing existing symlink at $GUARDRAILS_LINK"
+  rm "$GUARDRAILS_LINK"
+elif [ -d "$GUARDRAILS_LINK" ]; then
+  echo "Error: $GUARDRAILS_LINK exists as a real directory. Move or delete it first."
+  exit 1
+fi
+
+ln -s "$REPO_DIR/guardrails" "$GUARDRAILS_LINK"
+echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
 
 # Append shell function to ~/.zshrc if not already present
 if grep -q "wisersite-claude-config" "$ZSHRC" 2>/dev/null; then
