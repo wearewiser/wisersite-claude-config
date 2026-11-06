@@ -25,7 +25,7 @@ Related ticket for versioning + assessment: WP23-509.
 
 Added four AI-feature guardrails; applied Patrick's and Lachie's review feedback on the existing sections; centralised the file into `wisersite-claude-config`.
 
-**PR:** TBD (fill in once the `chore/centralise-development-guardrails` branch is opened as a PR).
+**PR:** https://github.com/wearewiser/wisersite-claude-config/pull/10
 **Author:** John Zissimou.
 
 **Added:**
