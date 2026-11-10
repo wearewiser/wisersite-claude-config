@@ -107,16 +107,23 @@ fi
 # symlink with a regular file and future dotfiles updates would stop reaching
 # the shell.
 if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
-  # Safety check: if BEGIN_MARK is present but END_MARK is missing (eg because
-  # the user hand-edited the block and deleted the closing marker), the awk
-  # refresh below would run with `in_block` never going back to 0 and silently
-  # delete everything after BEGIN_MARK. Refuse to run in that state.
-  if ! grep -qxF "$END_MARK" "$ZSHRC"; then
-    echo "Error: $ZSHRC contains '$BEGIN_MARK' but no matching '$END_MARK'."
-    echo "       Refusing to refresh because the awk block cannot tell where"
-    echo "       the sentinel-delimited block ends and would delete everything"
-    echo "       from '$BEGIN_MARK' to end-of-file. Restore the closing marker"
-    echo "       (or delete the whole wisersite-claude-config block) and re-run."
+  # Safety check: the awk refresh below assumes exactly one well-formed
+  # sentinel block (one BEGIN followed by one END). Anything else risks data
+  # loss - a missing END, a duplicate BEGIN, or markers in the wrong order
+  # would all leave `in_block` stuck at 1 at some point and silently delete
+  # lines up to EOF. Refuse to run in any of those states.
+  BEGIN_COUNT=$(grep -cxF "$BEGIN_MARK" "$ZSHRC")
+  END_COUNT=$(grep -cxF "$END_MARK" "$ZSHRC")
+  BEGIN_LINE=$(grep -nxF "$BEGIN_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
+  END_LINE=$(grep -nxF "$END_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
+  if [ "$BEGIN_COUNT" -ne 1 ] || [ "$END_COUNT" -ne 1 ] || [ -z "$END_LINE" ] || [ "$BEGIN_LINE" -ge "$END_LINE" ]; then
+    echo "Error: $ZSHRC has an unbalanced or malformed wisersite-claude-config block."
+    echo "       Expected exactly one '$BEGIN_MARK' followed by exactly one"
+    echo "       '$END_MARK' (found $BEGIN_COUNT BEGIN and $END_COUNT END markers)."
+    echo "       Refusing to refresh because the awk block would risk silently"
+    echo "       deleting lines between a stray marker and end-of-file. Restore"
+    echo "       the block to a single BEGIN/END pair (or delete the whole"
+    echo "       wisersite-claude-config block) and re-run."
     exit 1
   fi
   ZSHRC_TMP="$(mktemp)"
