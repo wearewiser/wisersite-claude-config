@@ -98,6 +98,23 @@ EOF
   echo "Created $WISER_CLAUDE_MD with the guardrails import."
 fi
 
+# One-time migration: strip the pre-sentinel claude() block if present.
+# Early versions of setup.sh appended an un-marked block (comment + 4-line
+# function); legacy users would otherwise accrue two claude() definitions
+# permanently. Only runs on first upgrade from the pre-sentinel version.
+LEGACY_COMMENT="# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude"
+if [ -f "$ZSHRC" ] && grep -qxF "$LEGACY_COMMENT" "$ZSHRC"; then
+  ZSHRC_TMP="$(mktemp)"
+  awk -v target="$LEGACY_COMMENT" '
+    $0 == target { skip = 4; next }
+    skip > 0 { skip--; next }
+    { print }
+  ' "$ZSHRC" > "$ZSHRC_TMP"
+  cat "$ZSHRC_TMP" > "$ZSHRC"
+  rm "$ZSHRC_TMP"
+  echo "Legacy pre-sentinel wisersite-claude-config block stripped from $ZSHRC"
+fi
+
 # Install or refresh the shell function block in ~/.zshrc.
 # The block is wrapped in sentinel markers so we can replace it in place on
 # re-run (eg when the comment or function body changes in a later version).
@@ -112,8 +129,10 @@ if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
   # loss - a missing END, a duplicate BEGIN, or markers in the wrong order
   # would all leave `in_block` stuck at 1 at some point and silently delete
   # lines up to EOF. Refuse to run in any of those states.
-  BEGIN_COUNT=$(grep -cxF "$BEGIN_MARK" "$ZSHRC")
-  END_COUNT=$(grep -cxF "$END_MARK" "$ZSHRC")
+  # Note: grep -c prints 0 to stdout AND exits 1 on no-match; the `|| true`
+  # suffixes prevent `set -e` from aborting before the validator runs.
+  BEGIN_COUNT=$(grep -cxF "$BEGIN_MARK" "$ZSHRC" || true)
+  END_COUNT=$(grep -cxF "$END_MARK" "$ZSHRC" || true)
   BEGIN_LINE=$(grep -nxF "$BEGIN_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
   END_LINE=$(grep -nxF "$END_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
   if [ "$BEGIN_COUNT" -ne 1 ] || [ "$END_COUNT" -ne 1 ] || [ -z "$END_LINE" ] || [ "$BEGIN_LINE" -ge "$END_LINE" ]; then
@@ -127,8 +146,12 @@ if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
     exit 1
   fi
   ZSHRC_TMP="$(mktemp)"
-  awk -v begin="$BEGIN_MARK" -v end="$END_MARK" -v rep="$SHELL_FUNCTION" '
-    $0 == begin {in_block=1; print rep; next}
+  # Pass SHELL_FUNCTION via environment and read via ENVIRON[]. macOS BWK awk
+  # rejects newlines in `-v` values with "awk: newline in string" and with
+  # `set -e` the whole script aborts here on any re-run. Env-var pass survives
+  # the newlines on both GNU awk and macOS awk.
+  REP="$SHELL_FUNCTION" awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
+    $0 == begin {in_block=1; print ENVIRON["REP"]; next}
     in_block && $0 == end {in_block=0; next}
     !in_block {print}
   ' "$ZSHRC" > "$ZSHRC_TMP"
@@ -136,9 +159,8 @@ if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
   rm "$ZSHRC_TMP"
   echo "Shell function refreshed in $ZSHRC"
 else
-  # Fresh install, or legacy install from before sentinels were added. In the
-  # legacy case the appended block shadows the older one at shell load time
-  # (zsh uses the last function definition); the old block is dead but inert.
+  # Fresh install path. The legacy-block migration above runs first so this
+  # branch is only ever reached with a clean zshrc (no pre-sentinel block).
   printf '\n%s\n' "$SHELL_FUNCTION" >> "$ZSHRC"
   echo "Shell function appended to $ZSHRC"
 fi
