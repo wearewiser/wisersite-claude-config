@@ -106,17 +106,60 @@ fi
 #   - "# wisersite-claude-config: pull latest Wiser agents before launching Claude"
 #   - "# wisersite-claude-config: pull latest Wiser agents and skills before launching Claude"
 #   - "# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude"
+# IMPORTANT: a blind "skip 4 lines after the comment" would corrupt any zshrc
+# where the user customised the legacy function (added a line inside it,
+# shortened it, etc). Validate the 4 body lines match the pristine historical
+# function exactly before deleting; if they do not, leave the block alone and
+# warn the user to clean it up manually.
 LEGACY_COMMENT_PREFIX="# wisersite-claude-config: pull latest"
+LEGACY_BODY_1='function claude() {'
+LEGACY_BODY_2='  git -C ~/Projects/Wiser/wisersite-claude-config pull --quiet'
+LEGACY_BODY_3='  command claude "$@"'
+LEGACY_BODY_4='}'
 if [ -f "$ZSHRC" ] && grep -q "^${LEGACY_COMMENT_PREFIX}" "$ZSHRC"; then
   ZSHRC_TMP="$(mktemp)"
-  awk -v prefix="$LEGACY_COMMENT_PREFIX" '
-    index($0, prefix) == 1 { skip = 4; next }
-    skip > 0 { skip--; next }
+  STATUS_TMP="$(mktemp)"
+  awk -v prefix="$LEGACY_COMMENT_PREFIX" \
+      -v b1="$LEGACY_BODY_1" \
+      -v b2="$LEGACY_BODY_2" \
+      -v b3="$LEGACY_BODY_3" \
+      -v b4="$LEGACY_BODY_4" \
+      -v status_file="$STATUS_TMP" '
+    index($0, prefix) == 1 {
+      comment = $0
+      g1 = getline l1
+      g2 = getline l2
+      g3 = getline l3
+      g4 = getline l4
+      if (g1 > 0 && g2 > 0 && g3 > 0 && g4 > 0 && \
+          l1 == b1 && l2 == b2 && l3 == b3 && l4 == b4) {
+        # Pristine historical block - drop all 5 lines.
+        next
+      }
+      # Customized or truncated - preserve every line that was read and flag.
+      print comment
+      if (g1 > 0) print l1
+      if (g2 > 0) print l2
+      if (g3 > 0) print l3
+      if (g4 > 0) print l4
+      print "customized" > status_file
+      next
+    }
     { print }
   ' "$ZSHRC" > "$ZSHRC_TMP"
   cat "$ZSHRC_TMP" > "$ZSHRC"
   rm "$ZSHRC_TMP"
-  echo "Legacy pre-sentinel wisersite-claude-config block stripped from $ZSHRC"
+  if [ -s "$STATUS_TMP" ]; then
+    echo "Warning: legacy wisersite-claude-config block in $ZSHRC appears customized"
+    echo "         (comment matches, body does not match the historical pristine"
+    echo "         function). Left in place to avoid corrupting your shell. The new"
+    echo "         sentinel block below shadows it at shell load, so claude() still"
+    echo "         resolves to the new function. To fully clean up, delete the stray"
+    echo "         block by hand."
+  else
+    echo "Legacy pre-sentinel wisersite-claude-config block stripped from $ZSHRC"
+  fi
+  rm "$STATUS_TMP"
 fi
 
 # Install or refresh the shell function block in ~/.zshrc.
