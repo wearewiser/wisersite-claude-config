@@ -107,6 +107,18 @@ fi
 # symlink with a regular file and future dotfiles updates would stop reaching
 # the shell.
 if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
+  # Safety check: if BEGIN_MARK is present but END_MARK is missing (eg because
+  # the user hand-edited the block and deleted the closing marker), the awk
+  # refresh below would run with `in_block` never going back to 0 and silently
+  # delete everything after BEGIN_MARK. Refuse to run in that state.
+  if ! grep -qxF "$END_MARK" "$ZSHRC"; then
+    echo "Error: $ZSHRC contains '$BEGIN_MARK' but no matching '$END_MARK'."
+    echo "       Refusing to refresh because the awk block cannot tell where"
+    echo "       the sentinel-delimited block ends and would delete everything"
+    echo "       from '$BEGIN_MARK' to end-of-file. Restore the closing marker"
+    echo "       (or delete the whole wisersite-claude-config block) and re-run."
+    exit 1
+  fi
   ZSHRC_TMP="$(mktemp)"
   awk -v begin="$BEGIN_MARK" -v end="$END_MARK" -v rep="$SHELL_FUNCTION" '
     $0 == begin {in_block=1; print rep; next}
