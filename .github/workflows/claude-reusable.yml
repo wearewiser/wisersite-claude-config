@@ -29,6 +29,13 @@ jobs:
             mkdir -p .claude/adr
             cp -r /tmp/wisersite-claude-config/docs/ADR/* .claude/adr/
           fi
+          # Note: the central guardrails are deliberately NOT copied into CI.
+          # anthropics/claude-code-action@v1 calls restoreConfigFromBase before
+          # invoking Claude, which wipes .claude/ and CLAUDE.md and restores
+          # them from the base branch for security; anything we write here
+          # would be gone by the time Claude starts. Agents that require the
+          # central guardrails (eg dod-guardian) are human-invoked local tools;
+          # they explicitly document that CI invocation is not supported.
 
       - name: Run Claude
         uses: anthropics/claude-code-action@v1
