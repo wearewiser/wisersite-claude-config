@@ -170,26 +170,38 @@ fi
 # by a dotfiles tool (chezmoi, stow, yadm, home-manager), `mv` would replace the
 # symlink with a regular file and future dotfiles updates would stop reaching
 # the shell.
-if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
-  # Safety check: the awk refresh below assumes exactly one well-formed
-  # sentinel block (one BEGIN followed by one END). Anything else risks data
-  # loss - a missing END, a duplicate BEGIN, or markers in the wrong order
-  # would all leave `in_block` stuck at 1 at some point and silently delete
-  # lines up to EOF. Refuse to run in any of those states.
-  # Note: grep -c prints 0 to stdout AND exits 1 on no-match; the `|| true`
-  # suffixes prevent `set -e` from aborting before the validator runs.
+#
+# Marker counts are computed upfront on every run so malformed states (orphan
+# END without matching BEGIN, duplicate markers, wrong order) are caught
+# BEFORE we decide between append and refresh. Earlier revisions only validated
+# when BEGIN was present, so an orphan END would silently get past the first
+# run (fresh-install append branch) and then poison validation on the second.
+if [ -f "$ZSHRC" ]; then
+  # grep -c prints 0 to stdout AND exits 1 on no-match; the `|| true` suffixes
+  # prevent `set -e` from aborting before the validator runs.
   BEGIN_COUNT=$(grep -cxF "$BEGIN_MARK" "$ZSHRC" || true)
   END_COUNT=$(grep -cxF "$END_MARK" "$ZSHRC" || true)
+else
+  BEGIN_COUNT=0
+  END_COUNT=0
+fi
+
+if [ "$BEGIN_COUNT" -eq 0 ] && [ "$END_COUNT" -eq 0 ]; then
+  # Fresh install path. No sentinel markers of any kind in zshrc.
+  printf '\n%s\n' "$SHELL_FUNCTION" >> "$ZSHRC"
+  echo "Shell function appended to $ZSHRC"
+elif [ "$BEGIN_COUNT" -eq 1 ] && [ "$END_COUNT" -eq 1 ]; then
+  # Refresh path. Exactly one well-formed block; validate ordering before the
+  # awk refresh, then replace in place.
   BEGIN_LINE=$(grep -nxF "$BEGIN_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
   END_LINE=$(grep -nxF "$END_MARK" "$ZSHRC" | head -n1 | cut -d: -f1)
-  if [ "$BEGIN_COUNT" -ne 1 ] || [ "$END_COUNT" -ne 1 ] || [ -z "$END_LINE" ] || [ "$BEGIN_LINE" -ge "$END_LINE" ]; then
-    echo "Error: $ZSHRC has an unbalanced or malformed wisersite-claude-config block."
-    echo "       Expected exactly one '$BEGIN_MARK' followed by exactly one"
-    echo "       '$END_MARK' (found $BEGIN_COUNT BEGIN and $END_COUNT END markers)."
-    echo "       Refusing to refresh because the awk block would risk silently"
-    echo "       deleting lines between a stray marker and end-of-file. Restore"
-    echo "       the block to a single BEGIN/END pair (or delete the whole"
-    echo "       wisersite-claude-config block) and re-run."
+  if [ "$BEGIN_LINE" -ge "$END_LINE" ]; then
+    echo "Error: $ZSHRC has sentinel markers in the wrong order"
+    echo "       (BEGIN on line $BEGIN_LINE, END on line $END_LINE). Refusing"
+    echo "       to refresh because the awk replace would silently delete"
+    echo "       lines between the stray END and end-of-file. Restore the"
+    echo "       block to a single BEGIN/END pair in the correct order"
+    echo "       (or delete the whole wisersite-claude-config block) and re-run."
     exit 1
   fi
   ZSHRC_TMP="$(mktemp)"
@@ -206,10 +218,15 @@ if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
   rm "$ZSHRC_TMP"
   echo "Shell function refreshed in $ZSHRC"
 else
-  # Fresh install path. The legacy-block migration above runs first so this
-  # branch is only ever reached with a clean zshrc (no pre-sentinel block).
-  printf '\n%s\n' "$SHELL_FUNCTION" >> "$ZSHRC"
-  echo "Shell function appended to $ZSHRC"
+  # Any other combination: orphan BEGIN or END without its partner, duplicate
+  # markers, etc. Refuse to touch the file; the awk refresh would risk data
+  # loss and the fresh-install append would compound the existing problem.
+  echo "Error: $ZSHRC has an unbalanced or malformed wisersite-claude-config"
+  echo "       block (expected exactly one '$BEGIN_MARK' and exactly one"
+  echo "       '$END_MARK'; found $BEGIN_COUNT BEGIN and $END_COUNT END markers)."
+  echo "       Refusing to run until the block is restored to a single BEGIN/END"
+  echo "       pair or removed entirely."
+  exit 1
 fi
 
 echo ""
