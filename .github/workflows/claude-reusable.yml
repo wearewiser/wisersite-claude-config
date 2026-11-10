@@ -29,6 +29,22 @@ jobs:
             mkdir -p .claude/adr
             cp -r /tmp/wisersite-claude-config/docs/ADR/* .claude/adr/
           fi
+          # Copy guardrails and inject an import into CLAUDE.md so Claude
+          # auto-loads them in this CI session. Agents that reference section 18
+          # of the guardrails (eg dod-guardian, which STOPs if the file is
+          # unreachable) rely on this being present.
+          if [ -d /tmp/wisersite-claude-config/guardrails ]; then
+            mkdir -p .claude/guardrails
+            cp -r /tmp/wisersite-claude-config/guardrails/* .claude/guardrails/
+            GUARDRAILS_IMPORT="@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md"
+            if [ -f CLAUDE.md ] && grep -qxF "$GUARDRAILS_IMPORT" CLAUDE.md; then
+              :
+            elif [ -f CLAUDE.md ]; then
+              printf '\n%s\n' "$GUARDRAILS_IMPORT" >> CLAUDE.md
+            else
+              printf '%s\n' "$GUARDRAILS_IMPORT" > CLAUDE.md
+            fi
+          fi
 
       - name: Run Claude
         uses: anthropics/claude-code-action@v1

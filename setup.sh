@@ -101,12 +101,20 @@ fi
 # Install or refresh the shell function block in ~/.zshrc.
 # The block is wrapped in sentinel markers so we can replace it in place on
 # re-run (eg when the comment or function body changes in a later version).
+# IMPORTANT: when refreshing, write back through the existing file (append + cat)
+# rather than `mv` the temp file over the top; if ~/.zshrc is a symlink managed
+# by a dotfiles tool (chezmoi, stow, yadm, home-manager), `mv` would replace the
+# symlink with a regular file and future dotfiles updates would stop reaching
+# the shell.
 if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
+  ZSHRC_TMP="$(mktemp)"
   awk -v begin="$BEGIN_MARK" -v end="$END_MARK" -v rep="$SHELL_FUNCTION" '
     $0 == begin {in_block=1; print rep; next}
     in_block && $0 == end {in_block=0; next}
     !in_block {print}
-  ' "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+  ' "$ZSHRC" > "$ZSHRC_TMP"
+  cat "$ZSHRC_TMP" > "$ZSHRC"
+  rm "$ZSHRC_TMP"
   echo "Shell function refreshed in $ZSHRC"
 else
   # Fresh install, or legacy install from before sentinels were added. In the

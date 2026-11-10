@@ -50,6 +50,9 @@ Added four AI-feature guardrails; applied Patrick's, Lachie's and Ian's review f
 - Section 17: `AIProvider`/`tenantKey` CI check scoped to repos that actually import the shared `AIProvider` per ADR 0001, not every repo (per Ian).
 - File header comment updated to say the file is distributed centrally from `wisersite-claude-config/guardrails/` and must not be copied into other repos (per Ian).
 - `agents/dod-guardian.md`: duplicate 14-item table deleted; the agent now reads section 18 of this file as the single source of truth (per Ian - the duplicate had already drifted).
+- `setup.sh`: zshrc refresh now writes back through the symlink (`cat` into the file) instead of `mv`'ing a temp file over the top, so dotfiles-managed `~/.zshrc` symlinks (chezmoi, stow, yadm, home-manager) survive a re-run (per Copilot round 3).
+- `.github/workflows/claude-reusable.yml`: CI installer now also copies `guardrails/` and injects the `@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md` import into `CLAUDE.md` so the dod-guardian agent can read section 18 in CI without hitting its new STOP-if-unavailable rule (per Copilot round 3).
+- `promptfoo/prompts/dod-guardian.json` + `promptfoo/dod-guardian.yaml`: evaluation prompt now mirrors section 18 at the time of update (with automated/MANUAL CHECK/N/A tags) and documents that the real agent reads from the central guardrails file; two new test cases cover the N/A tag handling and the missing-policy STOP path (per Copilot round 3).
 
 **Context:**
 - Four new AI-feature guardrails were agreed in the Oct 12 2026 governance session but blocked on the AI-delivery deadline; Nov 2 2026 innovation session reconfirmed them as part of the Jade + Lachie-owned guardrails work.
