@@ -10,12 +10,16 @@ ADR_LINK="$WISER_CLAUDE_DIR/adr"
 GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
 ZSHRC="$HOME/.zshrc"
 
-SHELL_FUNCTION='
-# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude
+BEGIN_MARK='# BEGIN wisersite-claude-config'
+END_MARK='# END wisersite-claude-config'
+
+SHELL_FUNCTION="$BEGIN_MARK
+# Pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude.
 function claude() {
   git -C ~/Projects/Wiser/wisersite-claude-config pull --quiet
-  command claude "$@"
-}'
+  command claude \"\$@\"
+}
+$END_MARK"
 
 echo "Setting up wisersite-claude-config..."
 
@@ -94,11 +98,21 @@ EOF
   echo "Created $WISER_CLAUDE_MD with the guardrails import."
 fi
 
-# Append shell function to ~/.zshrc if not already present
-if grep -q "wisersite-claude-config" "$ZSHRC" 2>/dev/null; then
-  echo "Shell function already present in $ZSHRC — skipping."
+# Install or refresh the shell function block in ~/.zshrc.
+# The block is wrapped in sentinel markers so we can replace it in place on
+# re-run (eg when the comment or function body changes in a later version).
+if [ -f "$ZSHRC" ] && grep -qxF "$BEGIN_MARK" "$ZSHRC"; then
+  awk -v begin="$BEGIN_MARK" -v end="$END_MARK" -v rep="$SHELL_FUNCTION" '
+    $0 == begin {in_block=1; print rep; next}
+    in_block && $0 == end {in_block=0; next}
+    !in_block {print}
+  ' "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+  echo "Shell function refreshed in $ZSHRC"
 else
-  echo "$SHELL_FUNCTION" >> "$ZSHRC"
+  # Fresh install, or legacy install from before sentinels were added. In the
+  # legacy case the appended block shadows the older one at shell load time
+  # (zsh uses the last function definition); the old block is dead but inert.
+  printf '\n%s\n' "$SHELL_FUNCTION" >> "$ZSHRC"
   echo "Shell function appended to $ZSHRC"
 fi
 

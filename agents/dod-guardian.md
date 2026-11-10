@@ -35,27 +35,20 @@ Use the results to populate the relevant criteria below.
 
 ## The 14 DoD criteria
 
-For each criterion, determine one of three statuses:
-- **PASS** — confirmed met (automated or clearly evidenced in the ticket/code)
-- **FAIL** — confirmed not met
-- **MANUAL CHECK** — cannot be verified automatically; requires human sign-off
+The authoritative list of Wiser DoD criteria lives in `DEVELOPMENT_GUARDRAILS.md` section 18, distributed centrally from `wisersite-claude-config/guardrails/` and auto-loaded into every Claude session via `~/Projects/Wiser/CLAUDE.md`. Do NOT maintain a second copy in this agent; the two have drifted before.
 
-| # | Criterion | How to assess |
-|---|-----------|---------------|
-| 1 | **Development Complete** | Is the implementation complete and on the correct branch (not main)? No uncommitted changes? |
-| 2 | **Acceptance Criteria** | Do the changes address all AC from the Jira ticket? Cross-check ticket AC against what was built. |
-| 3 | **Unit Testing** | Did the test suite pass with no critical failures? (automated) |
-| 4 | **Integration Testing** | Do integration tests pass and dependent services behave as expected? (automated where available, otherwise MANUAL CHECK) |
-| 5 | **Negative & Edge Case Testing** | Have error handling, validation and edge cases been tested? Check test coverage for error paths. |
-| 6 | **Regression Testing** | Does existing functionality still work? Any test failures outside the changed scope? |
-| 7 | **Performance Validation** | Does the feature meet agreed response times and scalability expectations? (MANUAL CHECK — requires load testing or metrics review) |
-| 8 | **Accessibility** | Does the feature meet WCAG 2.2 AA standards, or has the UI been signed off? (MANUAL CHECK for UI changes) |
-| 9 | **Security Review** | Have security checks been completed with no critical vulnerabilities? (MANUAL CHECK — flag for secrets-guardian if touching auth, APIs, or sensitive data) |
-| 10 | **Code Quality** | Has a code review been approved? Do changes follow the agreed coding standards? Is technical debt minimised? |
-| 11 | **Documentation** | Have technical docs, release notes and user documentation been updated where required? |
-| 12 | **Monitoring & Alerting** | Has logging, monitoring, dashboards and alerting been configured where appropriate? Check for Pino logger usage and GCP monitoring hooks. |
-| 13 | **Feature Flags** | If feature flags were required, have they been correctly implemented and validated? (N/A if no flags required) |
-| 14 | **Product Approval** | Has the Wiser Product Lead reviewed the feature and confirmed it delivers the intended business outcome? (MANUAL CHECK — always required) |
+Evaluate each of the 14 items in section 18 against the ticket. Treat each item's tag as follows:
+
+- `(automated)` -> a hard checkable item; use the automated-check output above or run the relevant command.
+- `(MANUAL CHECK)` -> flag for human sign-off; status is `MANUAL CHECK` unless you have direct evidence of PASS/FAIL.
+- `(N/A if ...)` -> may be skipped only when the stated condition holds. Note the condition in the Notes column.
+
+For each criterion, determine one of three statuses:
+- **PASS** - confirmed met (automated or clearly evidenced in the ticket/code).
+- **FAIL** - confirmed not met.
+- **MANUAL CHECK** - cannot be verified automatically; requires human sign-off.
+
+If you cannot read section 18 (eg the central guardrails file is not loaded in this session), STOP and tell the user to re-run `wisersite-claude-config/setup.sh`. Do not fall back to a hardcoded list.
 
 ## Output format
 

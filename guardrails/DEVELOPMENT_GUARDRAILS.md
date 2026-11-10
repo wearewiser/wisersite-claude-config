@@ -5,8 +5,10 @@
   it produces, across the poly-repo codebase. Written to be parsed by an AI coding
   agent as well as read by engineers.
 
-  How to use in a repo:
-    - Keep this file at the repo root (or import it from CLAUDE.md).
+  Distribution:
+    - This file is distributed centrally from `wisersite-claude-config/guardrails/`
+      via that repo's `setup.sh` symlink pattern. Do NOT copy it into other repos;
+      consumers symlink and auto-load it from `~/Projects/Wiser/CLAUDE.md`.
     - This is the SOFT layer: it guides the agent but is NOT a security boundary.
       Rules marked (HARD) or (CI) are additionally enforced by permissions, hooks,
       or the pipeline and must not be relied on from this file alone.
@@ -16,6 +18,17 @@
   (settings keys, hook events, CLAUDE.md imports) against current docs before wiring.
   Version history: see CHANGELOG.md in this directory.
 -->
+
+## Scope - which rules apply where
+
+This file loads into every Claude session started under `~/Projects/Wiser/`, including interactive developer sessions. Not every rule below applies to every session.
+
+- **Sections 0, 2-13 and 18** are universal. They bind the human developer and any agent equally: data rules, tenant isolation, secrets, IP/audit, breach handling, and the Definition of Done.
+- **Section 1 (Scope of autonomy)** describes the autonomous ticket agent (the one that opens PRs from Jira tickets on its own). In an interactive session, the human decides what to run; section 1 is a reminder that if Claude proposes a shell command, migration, or IaC change on your behalf, the human reviews and approves before it runs.
+- **Sections 14-17** are AI-feature implementation rules (prompt-injection defence, data-leakage guard, output validation, cross-tenant prompt safety). They apply wherever AI-feature code is being written or generated, whether by a human, the autonomous agent, or an interactive session.
+- **Section 18 (Definition of Done)** is a ticket-close checklist used by humans and by the `dod-guardian` agent; it does not describe runtime behaviour.
+
+---
 
 ## 0. Golden rules (read first)
 
@@ -158,10 +171,13 @@
   PR review (a separate, optional workflow currently live only in
   `wisersite-and-payload-plugin`; rollout to other repos tracked separately).
 - **Enforcement status by repo:** the soft layer is distributed via
-  `wisersite-claude-config/setup.sh` and is live in every Wiser repo once a dev
-  re-runs setup. The hard-layer hook ships per-repo under `.claude/hooks/`. CI
-  test enforcement only bites in repos whose pipeline actually runs the relevant
-  tests.
+  `wisersite-claude-config/setup.sh` and reaches **interactive developer
+  sessions** in any repo checked out under `~/Projects/Wiser/` once that dev
+  has re-run setup. It does NOT reach CI runners or the GitHub Claude PR-review
+  workflow; neither runs `setup.sh`, so in those contexts the pipeline itself
+  is the enforcer. The hard-layer hook ships per-repo under `.claude/hooks/`.
+  CI test enforcement only bites in repos whose pipeline actually runs the
+  relevant tests.
 
 ## 13. If a guardrail is breached (A6)
 
@@ -199,8 +215,10 @@
 - Every AI orchestrator MUST validate LLM responses against a JSON schema before
   rendering, persisting, or forwarding.
 - On validation mismatch: reject or retry; NEVER render unvalidated output.
-- Retries are bounded (max N attempts) and the mismatch reason MUST be fed back
-  into the next attempt's user turn so the model can self-correct.
+- Retries are bounded by a named config value at the call site (e.g.
+  `maxRetries`, with the ceiling documented alongside the call site); do NOT
+  leave a magic number or an unbounded loop. The mismatch reason MUST be fed
+  back into the next attempt's user turn so the model can self-correct.
 - Tests MUST assert that a schema-mismatched response is rejected and that the
   retry loop terminates within the configured bound (CI).
 
@@ -211,8 +229,11 @@
 - Every cache key for prompts or responses MUST include the tenant key; NEVER
   share cached entries across tenants.
 - NEVER resolve the tenant from a client-supplied parameter or ticket content.
-- CI check: any call site invoking the shared `AIProvider` MUST pass a
-  `tenantKey` argument. Missing or null tenant keys fail the build (CI).
+- CI check (applies only in repos that import the shared `AIProvider`, which
+  per ADR 0001 lives in the AI-serving Cloud Run functions, not in every
+  repo): any call site invoking the shared `AIProvider` MUST pass a
+  `tenantKey` argument. Missing or null tenant keys fail the build in those
+  repos (CI).
 - Tests MUST assert that a request as tenant A cannot read a cached response
   produced for tenant B (CI).
 

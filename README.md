@@ -85,6 +85,8 @@ source ~/.zshrc
 
 That's it. Agents, skills, and ADRs are now scoped to Wiser and will update automatically every time you run `claude`.
 
+**First-run import approval.** The first Claude Code session you start in a Wiser repo after setup may prompt you to approve importing `~/Projects/Wiser/CLAUDE.md` (the file setup.sh wrote). The import resolves to a symlink pointing outside the current repo, and Claude Code treats that as an external import. Approve it; silently declining means the guardrails do not load for that session and the soft layer is bypassed. The prompt is per-user, per-project, and only appears once.
+
 ---
 
 ## Adding Claude to a new repo
