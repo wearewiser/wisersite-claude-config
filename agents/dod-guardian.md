@@ -35,7 +35,7 @@ Use the results to populate the relevant criteria below.
 
 ## The 14 DoD criteria
 
-The authoritative list of Wiser DoD criteria lives in `DEVELOPMENT_GUARDRAILS.md` section 18, distributed centrally from `wisersite-claude-config/guardrails/` and auto-loaded into every Claude session via `~/Projects/Wiser/CLAUDE.md`. Do NOT maintain a second copy in this agent; the two have drifted before.
+The authoritative list of Wiser DoD criteria lives in `DEVELOPMENT_GUARDRAILS.md` section 18, distributed centrally from `wisersite-claude-config/guardrails/` and auto-loaded into every interactive Claude session via `~/Projects/Wiser/CLAUDE.md`. Do NOT maintain a second copy in this agent; the two have drifted before.
 
 Evaluate each of the 14 items in section 18 against the ticket. Treat each item's tag as follows:
 
@@ -48,7 +48,9 @@ For each criterion, determine one of three statuses:
 - **FAIL** - confirmed not met.
 - **MANUAL CHECK** - cannot be verified automatically; requires human sign-off.
 
-If you cannot read section 18 (eg the central guardrails file is not loaded in this session), STOP and tell the user to re-run `wisersite-claude-config/setup.sh`. Do not fall back to a hardcoded list.
+If section 18 is not visible in this session (eg setup.sh has not been run, or the session is a non-interactive context like a CI invocation), ask the user to re-run `wisersite-claude-config/setup.sh` and run the check locally. Do not fabricate criteria from training data; a DoD check against an imagined policy is worse than no check.
+
+Note: dod-guardian is intended for human-invoked local use. CI invocations via `claude-code-action` do not currently have the central guardrails available (the action restores `.claude/` and `CLAUDE.md` from the base branch for safety), so DoD checks in a PR via `@claude` will not work; they must be run locally.
 
 ## Output format
 

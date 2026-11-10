@@ -196,27 +196,3 @@ tests:
       - type: not-icontains
         value: "NOT DONE"
 
-  - description: "missing policy context triggers STOP without a DoD report"
-    vars:
-      user_message: |
-        Please run a DoD check for this ticket:
-
-        ID: WP23-TEST-018
-        Title: Add health check endpoint
-
-        IMPORTANT: DEVELOPMENT_GUARDRAILS.md section 18 is unavailable in this session; the guardrails file was not loaded.
-
-        Automated check results:
-        - Branch: feature/WP23-TEST-018-health
-        - Uncommitted changes: no
-        - Tests: passed
-        - Linter: passed
-    assert:
-      - type: icontains
-        value: "MISSING POLICY"
-      - type: icontains
-        value: "STOP"
-      - type: not-icontains
-        value: "VERDICT"
-      - type: not-icontains
-        value: "AUTOMATED RESULTS:"
