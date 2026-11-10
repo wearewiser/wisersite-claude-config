@@ -102,11 +102,15 @@ fi
 # Early versions of setup.sh appended an un-marked block (comment + 4-line
 # function); legacy users would otherwise accrue two claude() definitions
 # permanently. Only runs on first upgrade from the pre-sentinel version.
-LEGACY_COMMENT="# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude"
-if [ -f "$ZSHRC" ] && grep -qxF "$LEGACY_COMMENT" "$ZSHRC"; then
+# Match on the common prefix so all historical comment variants are covered:
+#   - "# wisersite-claude-config: pull latest Wiser agents before launching Claude"
+#   - "# wisersite-claude-config: pull latest Wiser agents and skills before launching Claude"
+#   - "# wisersite-claude-config: pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude"
+LEGACY_COMMENT_PREFIX="# wisersite-claude-config: pull latest"
+if [ -f "$ZSHRC" ] && grep -q "^${LEGACY_COMMENT_PREFIX}" "$ZSHRC"; then
   ZSHRC_TMP="$(mktemp)"
-  awk -v target="$LEGACY_COMMENT" '
-    $0 == target { skip = 4; next }
+  awk -v prefix="$LEGACY_COMMENT_PREFIX" '
+    index($0, prefix) == 1 { skip = 4; next }
     skip > 0 { skip--; next }
     { print }
   ' "$ZSHRC" > "$ZSHRC_TMP"
