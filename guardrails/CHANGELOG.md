@@ -71,7 +71,7 @@ Added four AI-feature guardrails; applied Patrick's, Lachie's and Ian's review f
 - `setup.sh` also appends an `@` import to `~/Projects/Wiser/CLAUDE.md` so the guardrails are actually auto-loaded by every Claude session, not just symlinked on disk (per Copilot round 1).
 - Audit-log destination tracked separately in WP23-546 (raised out of Lachie's review).
 
-**Score impact:** TBC. First baseline score to be recorded by Lachie as part of WP23-509 once the 1-5 assessment matrix is defined.
+**Score impact:** baseline 13 of 30 (2026-11-11, first assessment-matrix run, WP23-509): access and permissions 2, guardrail reach and understanding 2, enforcement 3, code quality 3, security and vulnerabilities 2, audit and logging 1. Matrix and evidence attached to WP23-509.
 
 ---
 
