@@ -82,7 +82,12 @@ echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
 if [ -L "$PROJECT_KNOWLEDGE_LINK" ]; then
   echo "Removing existing symlink at $PROJECT_KNOWLEDGE_LINK"
   rm "$PROJECT_KNOWLEDGE_LINK"
-elif [ -f "$PROJECT_KNOWLEDGE_LINK" ]; then
+elif [ -d "$PROJECT_KNOWLEDGE_LINK" ]; then
+  echo "Error: $PROJECT_KNOWLEDGE_LINK exists as a real directory. Move or delete it first."
+  echo "       (If left in place, 'ln -s' would silently create the link INSIDE the"
+  echo "       directory and the CLAUDE.md import would not resolve.)"
+  exit 1
+elif [ -e "$PROJECT_KNOWLEDGE_LINK" ]; then
   echo "Error: $PROJECT_KNOWLEDGE_LINK exists as a real file. Move or delete it first."
   exit 1
 fi

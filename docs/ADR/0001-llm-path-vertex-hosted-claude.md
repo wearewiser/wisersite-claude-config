@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-16
-amended: 2026-09-23
+amended: 2026-11-16
 ticket: WP23-126
 ---
 
@@ -37,11 +37,11 @@ Reviewer input (Slack thread, 2026-09-11 to 2026-09-16):
 - **WP23-175 and WP23-304 re-scope.** WP23-304 changes from "Anthropic direct spike" to "Vertex-hosted Claude spike" (endpoint + IAM instead of API key). Availability/latency validation is done via the WP23-304 spike: `eu` multi-region confirmed.
 - **Governance pass required.** Vertex-hosted Claude runs through Jade's AI-tools approval process before it can be used in production.
 - **~2-3 wks Vertex ramp cost.** The first AI feature bears the cost of GCP service account setup, Vertex quota requests, endpoint config, plus team ramp on the Vertex SDK. Realistic time-to-first-shipped-feature: ~4-5 weeks total.
-- **Tenant isolation lever.** IAM per service account replaces prompt / cache-key discipline as the primary isolation surface. The plugin's `getTenantDataSource` pattern (per-tenant Postgres) remains the tenant-scoped data access mechanism for reads; the Cloud Run function writes AI outputs to the same per-tenant Postgres model.
+- **Tenant isolation lever.** IAM per service account replaces prompt / cache-key discipline as the primary isolation surface. The plugin's `getTenantDataSource` pattern (per-tenant Postgres) remains the tenant-scoped data access mechanism for reads; writes land in BigQuery first (see storage bullet below) and the existing `gold-to-postgres` loader replicates the current snapshot to per-tenant Postgres.
 - **AI generation runs in a shared Cloud Run function, not the plugin.** Locked at architecture session (2026-09-22 pm). A single "silver bullet" Cloud Run function serves all product-facing AI features for MVP: WP23-175 (Component Insights & Recommendations), the WP23-184 AI Insights family (WP23-185 to WP23-191, one story per view), and WP23-74 (Content Grading). Broken apart later only if load or shape demands.
 - **Trigger model.** Event-driven off BigQuery gold-layer completion per tenant (not a fixed schedule). The Content Grading Regenerate button reuses the same Cloud Run function on-demand, with job status tracked in a jobs table and "last graded at" surfaced in the UI. No dedicated queue: Cloud Run's built-in retry and horizontal scaling covers it (Mikey's call, over Dumitru's RabbitMQ suggestion).
 - **Plugin does the read/display path only.** Following the widget pattern (self-contained module inside `wisersite-and-payload-plugin`), widgets read AI outputs from per-tenant Postgres. The shared `AIProvider` interface lives **inside** the Cloud Run function, not the plugin.
-- **AI outputs persist in per-tenant Postgres.** Not just cache: audit-history requirement from in-flight enterprise contracts (Mikey, data-retention clauses); also enables future recommendation-efficacy analytics. Cache TTL = 24 hours.
+- **AI outputs persist in BigQuery; per-tenant Postgres holds the current snapshot.** (Amended 2026-11-16 to reflect the 2026-09-29 storage-flow refinement and the shipped code.) The Cloud Run function writes to BigQuery `ai_*` tables (append-only = the audit history, required by in-flight enterprise contracts; also enables future recommendation-efficacy analytics). The `gold-to-postgres` loader replicates only the `_current` snapshot tables to per-tenant Postgres for widget reads. The history tables are deliberately not replicated. Postgres cache TTL for on-demand regenerate = 24 hours.
 - **Per-tenant variance is config, not prompts.** The prompt set is shared across tenants; per-tenant tone-of-voice / brand guidelines are injected into shared prompts at generation time.
 - **Cost visibility via GCP billing.** No separate Anthropic dashboard to reconcile. AI-specific log-based metrics (token count, cost per tenant, cache hit/miss, validation failure rate) still needed.
 - **Model version cadence lags Anthropic direct by days-to-weeks.** Rarely load-bearing, but flagged in case a specific new-Claude feature is time-sensitive.

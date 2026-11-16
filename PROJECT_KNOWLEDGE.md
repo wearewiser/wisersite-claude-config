@@ -107,10 +107,11 @@ or the WAF returns 403.
   1. **IAM** - per-tenant service accounts are scoped to their own dataset/DB;
      wrong-tenant queries are denied by GCP.
   2. **Code** - `getTenantDataSource` fails closed on unknown keys.
-- Feature entitlement (which widgets / AI features a tenant sees) is
-  **admin-dashboard-only**: toggled off means the widget does not render, so no
-  API request is ever made. Backend assumes any request reaching it is
-  authorised.
+- **Feature entitlement.** Which widgets / AI features a tenant sees is resolved
+  at runtime from centralised tenant/tier config; nothing is hardcoded on/off.
+  **Enforce server-side (API layer), not just by hiding UI.** Deny by default:
+  if config is missing or unreadable, the feature is off (fail closed). See
+  `guardrails/DEVELOPMENT_GUARDRAILS.md` section 7.
 
 ---
 
