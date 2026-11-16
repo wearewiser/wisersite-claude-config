@@ -6,6 +6,7 @@ Shared Claude Code configuration for all Wiser repos. Single source of truth for
 
 ```
 wisersite-claude-config/
+├── PROJECT_KNOWLEDGE.md             # single-page project context loaded every session
 ├── agents/                          # shared Claude agents loaded by all repos
 │   ├── branch-guardian.md
 │   ├── dod-guardian.md
@@ -37,16 +38,22 @@ wisersite-claude-config/
 
 Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates four symlinks under `~/Projects/Wiser/.claude/`:
+`setup.sh` creates five symlinks under `~/Projects/Wiser/.claude/`:
 
 - `agents/` -> this repo's `agents/` folder
 - `skills/` -> this repo's `.claude/skills/` folder
 - `adr/` -> this repo's `docs/ADR/` folder
 - `guardrails/` -> this repo's `guardrails/` folder
+- `PROJECT_KNOWLEDGE.md` -> this repo's `PROJECT_KNOWLEDGE.md` file (file-level symlink)
 
-It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, ADRs, and guardrails are always up to date with no manual steps.
+It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, ADRs, guardrails, and project knowledge are always up to date with no manual steps.
 
-Guardrails are a different shape from ADRs: they must load on **every** Claude session, not on demand. `setup.sh` therefore appends an `@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md` import line to `~/Projects/Wiser/CLAUDE.md` (creating that file if it does not exist). Claude Code's hierarchical CLAUDE.md discovery then surfaces the guardrails in every session started under `~/Projects/Wiser/`.
+Guardrails and project knowledge are a different shape from ADRs: they must load on **every** Claude session, not on demand. `setup.sh` therefore appends two import lines to `~/Projects/Wiser/CLAUDE.md` (creating that file if it does not exist):
+
+- `@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md`
+- `@.claude/PROJECT_KNOWLEDGE.md`
+
+Claude Code's hierarchical CLAUDE.md discovery then surfaces both in every session started under `~/Projects/Wiser/`.
 
 Repos that want Claude to consult the shared ADRs should point at them from their `CLAUDE.md`, e.g. `Cross-repo ADRs: ~/Projects/Wiser/.claude/adr/`. ADRs are read on demand (not auto-loaded), so this only matters for repos where cross-cutting decisions are relevant.
 
@@ -83,9 +90,9 @@ cd ~/Projects/Wiser/wisersite-claude-config
 source ~/.zshrc
 ```
 
-That's it. Agents, skills, and ADRs are now scoped to Wiser and will update automatically every time you run `claude`.
+That's it. Agents, skills, ADRs, guardrails, and project knowledge are now scoped to Wiser and will update automatically every time you run `claude`.
 
-**First-run import approval.** The first Claude Code session you start in a Wiser repo after setup may prompt you to approve importing `~/Projects/Wiser/CLAUDE.md` (the file setup.sh wrote). The import resolves to a symlink pointing outside the current repo, and Claude Code treats that as an external import. Approve it; silently declining means the guardrails do not load for that session and the soft layer is bypassed. The prompt is per-user, per-project, and only appears once.
+**First-run import approval.** The first Claude Code session you start in a Wiser repo after setup may prompt you to approve importing `~/Projects/Wiser/CLAUDE.md` (the file setup.sh wrote). The imports resolve to symlinks pointing outside the current repo, and Claude Code treats those as external imports. Approve them; silently declining means the guardrails or project-knowledge doc do not load for that session and the shared context is bypassed. The prompt is per-user, per-project, and only appears once.
 
 ---
 
@@ -153,3 +160,11 @@ New Wiser-wide architecture decisions land in `docs/ADR/`. Follow the existing n
 Once merged to `main`, every dev's next `claude` launch picks it up automatically via the shell wrapper `git pull`. Every downstream CI run picks it up on its next PR trigger, no consumer-side change required.
 
 Repo-scoped decisions (internal to a single service, e.g. response-shape contracts, module boundaries within one repo) stay in that service's own `docs/ADR/`, not here. See `0000-use-adrs.md` for the scope boundary.
+
+---
+
+## Updating project knowledge
+
+`PROJECT_KNOWLEDGE.md` is the single-page project overview loaded into every Claude session. Keep it short; it is a tax on every conversation. The file itself documents its own update rules — read the "Updating this document" section at the bottom before editing. Rough budget: ~300 lines / ~3k tokens.
+
+Shape of a good change: a one-line entry under an existing section, or a new row in the "If X breaks, look here" table. Shape of a bad change: pasting in a decision log from a ticket. Decisions that shape future work belong in an ADR and are referenced from here.

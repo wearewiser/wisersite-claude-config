@@ -8,13 +8,14 @@ AGENTS_LINK="$WISER_CLAUDE_DIR/agents"
 SKILLS_LINK="$WISER_CLAUDE_DIR/skills"
 ADR_LINK="$WISER_CLAUDE_DIR/adr"
 GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
+PROJECT_KNOWLEDGE_LINK="$WISER_CLAUDE_DIR/PROJECT_KNOWLEDGE.md"
 ZSHRC="$HOME/.zshrc"
 
 BEGIN_MARK='# BEGIN wisersite-claude-config'
 END_MARK='# END wisersite-claude-config'
 
 SHELL_FUNCTION="$BEGIN_MARK
-# Pull latest Wiser agents, skills, ADRs, and guardrails before launching Claude.
+# Pull latest Wiser agents, skills, ADRs, guardrails, and project knowledge before launching Claude.
 function claude() {
   git -C ~/Projects/Wiser/wisersite-claude-config pull --quiet
   command claude \"\$@\"
@@ -74,18 +75,43 @@ fi
 ln -s "$REPO_DIR/guardrails" "$GUARDRAILS_LINK"
 echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
 
-# Wire the guardrails into Claude sessions by importing them from the
-# Wiser project-level CLAUDE.md (auto-discovered by any session under
-# ~/Projects/Wiser/). The symlink above makes the file available on disk;
-# this import makes Claude actually load it.
+# Create project-knowledge symlink (file-level, not folder). Unlike the four
+# folder symlinks above, PROJECT_KNOWLEDGE.md is a single file at the repo
+# root, so the symlink points at the file directly. Handle existing symlink
+# or real file.
+if [ -L "$PROJECT_KNOWLEDGE_LINK" ]; then
+  echo "Removing existing symlink at $PROJECT_KNOWLEDGE_LINK"
+  rm "$PROJECT_KNOWLEDGE_LINK"
+elif [ -f "$PROJECT_KNOWLEDGE_LINK" ]; then
+  echo "Error: $PROJECT_KNOWLEDGE_LINK exists as a real file. Move or delete it first."
+  exit 1
+fi
+
+ln -s "$REPO_DIR/PROJECT_KNOWLEDGE.md" "$PROJECT_KNOWLEDGE_LINK"
+echo "Symlink created: $PROJECT_KNOWLEDGE_LINK -> $REPO_DIR/PROJECT_KNOWLEDGE.md"
+
+# Wire the guardrails AND project knowledge into Claude sessions by importing
+# them from the Wiser project-level CLAUDE.md (auto-discovered by any session
+# under ~/Projects/Wiser/). The symlinks above make the files available on
+# disk; these imports make Claude actually load them.
 WISER_CLAUDE_MD="$HOME/Projects/Wiser/CLAUDE.md"
 GUARDRAILS_IMPORT="@.claude/guardrails/DEVELOPMENT_GUARDRAILS.md"
+PROJECT_KNOWLEDGE_IMPORT="@.claude/PROJECT_KNOWLEDGE.md"
 
-if [ -f "$WISER_CLAUDE_MD" ] && grep -qxF "$GUARDRAILS_IMPORT" "$WISER_CLAUDE_MD"; then
-  echo "Guardrails import already present in $WISER_CLAUDE_MD, skipping."
-elif [ -f "$WISER_CLAUDE_MD" ]; then
-  printf '\n%s\n' "$GUARDRAILS_IMPORT" >> "$WISER_CLAUDE_MD"
-  echo "Guardrails import appended to $WISER_CLAUDE_MD"
+append_import_if_missing() {
+  local import_line="$1"
+  local label="$2"
+  if grep -qxF "$import_line" "$WISER_CLAUDE_MD"; then
+    echo "$label import already present in $WISER_CLAUDE_MD, skipping."
+  else
+    printf '\n%s\n' "$import_line" >> "$WISER_CLAUDE_MD"
+    echo "$label import appended to $WISER_CLAUDE_MD"
+  fi
+}
+
+if [ -f "$WISER_CLAUDE_MD" ]; then
+  append_import_if_missing "$GUARDRAILS_IMPORT" "Guardrails"
+  append_import_if_missing "$PROJECT_KNOWLEDGE_IMPORT" "Project knowledge"
 else
   cat > "$WISER_CLAUDE_MD" <<EOF
 # Wiser project CLAUDE.md
@@ -94,8 +120,9 @@ Project-level guidance applied to every Wiser repo via Claude Code's
 hierarchical CLAUDE.md discovery.
 
 $GUARDRAILS_IMPORT
+$PROJECT_KNOWLEDGE_IMPORT
 EOF
-  echo "Created $WISER_CLAUDE_MD with the guardrails import."
+  echo "Created $WISER_CLAUDE_MD with the guardrails and project knowledge imports."
 fi
 
 # One-time migration: strip the pre-sentinel claude() block if present.
