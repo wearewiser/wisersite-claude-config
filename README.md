@@ -94,6 +94,16 @@ That's it. Agents, skills, ADRs, guardrails, and project knowledge are now scope
 
 **First-run import approval.** The first Claude Code session you start in a Wiser repo after setup may prompt you to approve importing `~/Projects/Wiser/CLAUDE.md` (the file setup.sh wrote). The imports resolve to symlinks pointing outside the current repo, and Claude Code treats those as external imports. Approve them; silently declining means the guardrails or project-knowledge doc do not load for that session and the shared context is bypassed. The prompt is per-user, per-project, and only appears once.
 
+### Upgrading an existing install
+
+The `claude()` shell wrapper only runs `git pull` on this repo on every launch; it does not re-run `setup.sh`. If a change here introduces new wiring (a new symlink target, a new `@import` line in `~/Projects/Wiser/CLAUDE.md`, a new shared file to distribute), existing devs must re-run setup once to pick it up. Content updates to existing files flow automatically.
+
+```bash
+cd ~/Projects/Wiser/wisersite-claude-config && ./setup.sh && source ~/.zshrc
+```
+
+Re-running is idempotent: existing symlinks are refreshed, existing import lines are left as-is.
+
 ---
 
 ## Adding Claude to a new repo

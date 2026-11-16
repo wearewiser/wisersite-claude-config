@@ -120,9 +120,14 @@ or the WAF returns 403.
 Every product AI feature follows this pattern. Build on it; do not reinvent.
 
 - **Generation runs in a Cloud Run Function or Job** in
-  `wisersite-data-fetching-gcp-functions`. Two triggers, one codebase: daily
-  (Cloud Scheduler / event-driven off gold-layer completion) and on-demand
-  (Payload backend calls the Function via HTTP).
+  `wisersite-data-fetching-gcp-functions`. Two trigger patterns across
+  features; shared provider / validator / prompt-loader code, different entry
+  points:
+    - **Scheduled Jobs:** `content-grading` (Cloud Scheduler, weekly Mon 03:xx
+      UTC) and `ai-insights` (Cloud Scheduler, daily 06:45 UTC).
+    - **HTTP on-demand Functions:** `tone-of-voice` and `content-generation`,
+      invoked by the Payload backend when a user interacts with the CMS.
+    - No EventArc / Pub/Sub / BigQuery-completion triggers in play today.
 - **LLM path:** Vertex-hosted Claude, authed by GCP IAM per-service-account.
   ADR `0001-llm-path-vertex-hosted-claude.md`. Model: Claude Haiku 4.5 on
   `europe-west1`.
@@ -234,7 +239,9 @@ Shared agents (loaded automatically in every repo under `~/Projects/Wiser/`):
   `git branch --show-current` after it reports success.
 - `dor-guardian` - run before starting a ticket.
 - `dod-guardian` - run before raising a PR.
-- `secrets-guardian` - runs before any commit that touches credentials or config.
+- `secrets-guardian` - runs before **every** git commit, not just commits that
+  touch credentials or config (accidentally-introduced secrets land in
+  unrelated changes too).
 - `ticket-planner` - produces a technical implementation plan for a Jira ticket
   before code is written.
 
