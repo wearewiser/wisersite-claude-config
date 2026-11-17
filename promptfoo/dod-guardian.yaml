@@ -170,3 +170,30 @@ tests:
         value: "AUTOMATED RESULTS"
       - type: icontains
         value: "Product Approval"
+
+  - description: "feature flags not required returns N/A in item 13's status column, not FAIL"
+    vars:
+      user_message: |
+        Please run a DoD check for this ticket:
+
+        ID: WP23-TEST-017
+        Title: Rename settings tab from "Advanced" to "Developer"
+        Acceptance Criteria:
+          - Settings tab reads "Developer" not "Advanced"
+
+        Automated check results:
+        - Branch: feature/WP23-TEST-017-rename-tab
+        - Uncommitted changes: no
+        - Tests: passed
+        - Linter: passed
+
+        Notes from developer: No feature flag needed - this is a static rename rolled out to everyone at once.
+    assert:
+      # Regex (not icontains) so we check item 13's STATUS COLUMN specifically.
+      # icontains would pass if "N/A" appeared only in the notes column while
+      # the status column said MANUAL CHECK - a real false positive.
+      - type: regex
+        value: '\|\s*13\s*\|\s*Feature Flags\s*\|\s*N/A\s*\|'
+      - type: not-icontains
+        value: "NOT DONE"
+
