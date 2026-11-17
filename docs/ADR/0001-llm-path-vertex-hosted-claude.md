@@ -34,7 +34,7 @@ Reviewer input (Slack thread, 2026-09-11 to 2026-09-16):
 
 ## Consequences
 
-- **WP23-175 and WP23-304 re-scope.** WP23-304 changes from "Anthropic direct spike" to "Vertex-hosted Claude spike" (endpoint + IAM instead of API key). Availability/latency validation is done via the WP23-304 spike: `eu` multi-region confirmed.
+- **WP23-175 and WP23-304 re-scope.** WP23-304 changes from "Anthropic direct spike" to "Vertex-hosted Claude spike" (endpoint + IAM instead of API key). Availability/latency validation is done via the WP23-304 spike: `eu` multi-region confirmed at the time; amended 2026-11-16, see Region above (`europe-west1`).
 - **Governance pass required.** Vertex-hosted Claude runs through Jade's AI-tools approval process before it can be used in production.
 - **~2-3 wks Vertex ramp cost.** The first AI feature bears the cost of GCP service account setup, Vertex quota requests, endpoint config, plus team ramp on the Vertex SDK. Realistic time-to-first-shipped-feature: ~4-5 weeks total.
 - **Tenant isolation lever.** IAM per service account replaces prompt / cache-key discipline as the primary isolation surface. The plugin's `getTenantDataSource` pattern (per-tenant Postgres) remains the tenant-scoped data access mechanism for reads; writes land in BigQuery first (see storage bullet below) and the existing `gold-to-postgres` loader replicates the current snapshot to per-tenant Postgres.

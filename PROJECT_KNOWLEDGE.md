@@ -85,9 +85,7 @@ that needs tenant data, including AI features.**
 holds actual secrets. Never hardcode either; see
 `guardrails/DEVELOPMENT_GUARDRAILS.md`.
 
-**Everything in GCP, region `europe-west1`.** Haiku 4.5 quota confirmed here;
-ADR 0001 records an older `eu` multi-region reference, `europe-west1` is the
-operational default.
+**Everything in GCP, region `europe-west1`.** Haiku 4.5 quota confirmed here.
 
 **Cloudflare WAF fronts `*.wiser.site`.** Any outbound HTTP client we write
 must set an honest `User-Agent` (`<service-name>/<version> (+<owner-url>)`)
@@ -244,6 +242,10 @@ Shared agents (loaded automatically in every repo under `~/Projects/Wiser/`):
   unrelated changes too).
 - `ticket-planner` - produces a technical implementation plan for a Jira ticket
   before code is written.
+- `design-fidelity-reviewer` - run after any UI / front-end implementation task.
+  Compares the built UI against the project's designs (CSS, layout, structure,
+  colour, typography, spacing) via source inspection and screenshots, auto-fixes
+  safe discrepancies, flags the rest.
 
 User-invoked skills:
 
