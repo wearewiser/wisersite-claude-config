@@ -59,5 +59,8 @@ OUT_DIR="${TMPDIR:-/tmp}"
 STAMP="$(date -u +%Y%m%dT%H%M%S)-${RANDOM}"
 OUT_FILE="${OUT_DIR}/claude-hook-probe-${PHASE}-${STAMP}.json"
 
-cat > "$OUT_FILE" 2>/dev/null || true
+# The hook input carries raw (pre-redaction) command strings, session
+# ids, and file paths. Write under umask 077 so another user on a
+# shared system cannot read what Claude was about to run.
+( umask 077 && cat > "$OUT_FILE" ) 2>/dev/null || true
 exit 0
