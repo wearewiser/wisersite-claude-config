@@ -262,4 +262,23 @@ else
 fi
 
 echo ""
+
+# Pre-flight check for the Claude activity-log hook (schemas/activity_log.md).
+# Non-fatal. The hook itself is best-effort and exits 0 on missing tooling,
+# but warning here tells a new install why no entries will land until they
+# fix it.
+echo "Checking Claude activity-log hook prerequisites..."
+if ! command -v gcloud >/dev/null 2>&1; then
+  echo "  Warning: gcloud is not on PATH. The Claude activity-log hook will"
+  echo "           silently skip every write until gcloud is installed and"
+  echo "           authenticated against the wiser-mainframe project."
+elif ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  echo "  Warning: no gcloud ADC configured. Run"
+  echo "           'gcloud auth application-default login' and set the project"
+  echo "           to wiser-mainframe before the Claude activity-log hook can write."
+else
+  echo "  gcloud + ADC: OK"
+fi
+
+echo ""
 echo "Setup complete. Run: source ~/.zshrc"

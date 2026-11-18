@@ -13,10 +13,15 @@ wisersite-claude-config/
 │   ├── dor-guardian.md
 │   ├── secrets-guardian.md
 │   └── ticket-planner.md
-├── .claude/skills/                  # user-invoked skills shared across repos
-│   └── user-story-writer/
-│       ├── SKILL.md
-│       └── data-mapping/            # static copy of Wiser Data Brief tabs
+├── .claude/
+│   ├── settings.json                # shared Claude Code settings (hooks)
+│   ├── hooks/                       # shared Claude Code hooks loaded by all repos
+│   │   ├── activity-log.sh
+│   │   └── README.md
+│   └── skills/                      # user-invoked skills shared across repos
+│       └── user-story-writer/
+│           ├── SKILL.md
+│           └── data-mapping/        # static copy of Wiser Data Brief tabs
 ├── docs/ADR/                        # Wiser-wide architecture decisions
 │   ├── 0000-use-adrs.md
 │   ├── 0001-llm-path-vertex-hosted-claude.md
@@ -24,6 +29,8 @@ wisersite-claude-config/
 ├── guardrails/                      # Wiser-wide development guardrails
 │   ├── DEVELOPMENT_GUARDRAILS.md
 │   └── CHANGELOG.md
+├── schemas/                         # pinned shared schemas (single source of truth)
+│   └── activity_log.md
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews
@@ -56,6 +63,12 @@ Guardrails and project knowledge are a different shape from ADRs: they must load
 Claude Code's hierarchical CLAUDE.md discovery then surfaces both in every session started under `~/Projects/Wiser/`.
 
 Repos that want Claude to consult the shared ADRs should point at them from their `CLAUDE.md`, e.g. `Cross-repo ADRs: ~/Projects/Wiser/.claude/adr/`. ADRs are read on demand (not auto-loaded), so this only matters for repos where cross-cutting decisions are relevant.
+
+### Activity-log hook
+
+A shared `PreToolUse` / `PostToolUse` hook (`.claude/hooks/activity-log.sh`) writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, so guardrails §5.3 and §11 have a real audit trail to query during an incident. The hook extracts the ticket id from the current git branch (skipping silently on non-ticket branches), redacts secrets out of shell command strings, and never fails a tool call. Payload shape is pinned in `schemas/activity_log.md`; hook README is at `.claude/hooks/README.md`.
+
+Writes run under the invoking developer's gcloud ADC, so no service account key is distributed to laptops. Prerequisites: `gcloud` on PATH and an active ADC authenticated against `wiser-mainframe`. `setup.sh` warns at install time if either is missing. Local off-switch: `export CLAUDE_ACTIVITY_LOG=off`.
 
 ### CI
 
