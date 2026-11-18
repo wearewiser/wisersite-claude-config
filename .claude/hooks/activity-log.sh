@@ -115,7 +115,7 @@ if [[ "$PHASE" == "pre" ]]; then
     exit 0
   fi
   if [[ -n "$ticket_cache" ]]; then
-    printf '%s' "$ticket_id" > "$ticket_cache" 2>/dev/null || true
+    ( umask 077 && printf '%s' "$ticket_id" > "$ticket_cache" ) 2>/dev/null || true
   fi
 else
   if [[ -n "$ticket_cache" && -s "$ticket_cache" ]]; then
@@ -166,8 +166,13 @@ timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # leak secrets.
 command_redacted=""
 if [[ -n "$raw_command" ]]; then
-  command_redacted="$(printf '%s' "$raw_command" | "$HOOK_DIR/lib/redact-command.sh" 2>/dev/null)"
-  if [[ -z "$command_redacted" ]]; then
+  # Check exit status explicitly: a perl crash mid-stream can produce
+  # partially-redacted output before dying. Both a non-zero exit and
+  # an empty result on non-empty input are treated as failure, so a
+  # partial token cannot slip through the fallback.
+  if ! command_redacted="$(printf '%s' "$raw_command" | "$HOOK_DIR/lib/redact-command.sh" 2>/dev/null)"; then
+    command_redacted="[redaction-failed]"
+  elif [[ -z "$command_redacted" ]]; then
     command_redacted="[redaction-failed]"
   fi
 
