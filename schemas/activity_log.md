@@ -45,7 +45,7 @@ Entries are JSON. Core fields are required for every entry; sidecar fields are o
 | `request_id` | string | correlating across writers | For joining against other `wiser_shared.logs` emissions. |
 | `tool_name` | string | `action = tool_use` | Which tool Claude invoked (e.g. `Bash`, `Edit`, `Read`, `Write`). |
 | `phase` | enum string | `action = tool_use` | `pre` or `post`. Distinguishes the two entries emitted per tool call. |
-| `status` | enum string | `action = tool_use`, `phase = post` | `ok`, `error`, or `blocked`. `blocked` means a guardrail hook prevented the call. |
+| `status` | enum string | `action = tool_use`, `phase = post` | `ok` on `PostToolUse`, `error` on `PostToolUseFailure`. A blocked call emits no post entry at all; the gap (a pre with no matching post) is the signal. |
 | `file_path` | string | `action = tool_use`, tool reads / edits / writes a file | The target path from `tool_input.file_path` (or `tool_input.path`). Before / after text is never logged. |
 | `command` | string | `action = tool_use`, `tool_name = Bash` | Shell command string from `tool_input.command`, after the redaction pass below. Capped at 500 characters post-redaction. |
 
@@ -71,9 +71,8 @@ Writers must stamp Cloud Logging severity consistently with the table below so a
 
 | Entry | Severity | Rationale |
 | --- | --- | --- |
-| `tool_use` with `status = ok` | `INFO` | Routine; no operator action needed. |
-| `tool_use` with `status = error` | `WARNING` | The tool call failed; the user's session continues. No pager. |
-| `tool_use` with `status = blocked` | `WARNING` | A guardrail hook prevented the call; worth seeing, not pageable. |
+| `tool_use` with `status = ok` (`PreToolUse` or successful `PostToolUse`) | `INFO` | Routine; no operator action needed. |
+| `tool_use` with `status = error` (`PostToolUseFailure`) | `WARNING` | The tool call failed; the user's session continues. No pager. |
 | `pr_opened` / `pr_reviewed` / `pr_merged` / `deployment_approved` | `INFO` | Routine audit trail. |
 | Write failure logged by the hook itself (first failure per session, stderr only) | `WARNING` | Not written to Cloud Logging; stderr only. Prevents silent failure. |
 
@@ -110,13 +109,14 @@ Every change to the redaction rules above must ship with an updated test-vector 
 
 ## Correlation
 
-Two entries are emitted per tool call: one from `PreToolUse` and one from `PostToolUse`. They share a `request_id`. The `request_id` is sourced, in order of preference:
+Two entries are emitted per tool call:
 
-1. `tool_use_id` from the Claude Code hook input, if present.
-2. `session_id` from the Claude Code hook input combined with a per-call counter, if `tool_use_id` is absent.
-3. A `uuidgen` cached to a session-scoped file as a last-resort fallback.
+- A `PreToolUse` entry (`phase = pre`, `status = ok`) when the tool call starts.
+- Either a `PostToolUse` entry on success (`phase = post`, `status = ok`) or a `PostToolUseFailure` entry on failure (`phase = post`, `status = error`). A successful call never emits both.
 
-The shape of the hook input is verified end-to-end before the writer is built; whichever of the above is reliably present on the currently shipped Claude Code version wins.
+The two entries share `request_id`, which is sourced directly from the Claude Code hook input's `tool_use_id` field (verified authoritative on the late-2026 upstream schema, https://code.claude.com/docs/en/hooks.md). A `PreToolUse` with no matching `post` entry means the call was blocked or the session terminated between pre and post; the gap itself is the signal. Investigators query by `jsonPayload.request_id` to pair entries.
+
+`session_id` is still carried on each entry for coarse grouping across every tool call in a single session, but is not used as a correlation key.
 
 ## Change process
 

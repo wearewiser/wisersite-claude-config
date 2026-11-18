@@ -54,18 +54,14 @@ fi
 tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null || true)"
 session_id="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
 tool_use_id="$(printf '%s' "$input" | jq -r '.tool_use_id // empty' 2>/dev/null || true)"
-file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null || true)"
+file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
 raw_command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
 
-# Correlation id: prefer tool_use_id, fall back to session_id, then a
-# per-call uuid as last resort. Documented in schemas/activity_log.md.
-if [[ -n "$tool_use_id" ]]; then
-  request_id="$tool_use_id"
-elif [[ -n "$session_id" ]]; then
-  request_id="$session_id"
-else
-  request_id="$(uuidgen 2>/dev/null || date -u +%s%N)"
-fi
+# Correlation id: tool_use_id is the authoritative shared id between a
+# PreToolUse entry and its matching PostToolUse / PostToolUseFailure
+# entry (schemas/activity_log.md). session_id is used only as a bucket
+# for the first-failure-per-session stderr warning.
+request_id="$tool_use_id"
 
 # Actor: gh login if available, cached per session. Fall back to $USER.
 actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login"
@@ -92,22 +88,32 @@ if [[ -n "$raw_command" ]]; then
   fi
 fi
 
-# Compute status + severity. Pre entries are always INFO/ok. Post
-# entries read tool_response for an exit_code or error marker.
-status="ok"
-severity="INFO"
-if [[ "$PHASE" == "post" ]]; then
-  exit_code="$(printf '%s' "$input" | jq -r '.tool_response.exit_code // 0' 2>/dev/null || echo 0)"
-  blocked="$(printf '%s' "$input" | jq -r '.tool_response.blocked // empty' 2>/dev/null || true)"
-  error_marker="$(printf '%s' "$input" | jq -r '.tool_response.error // empty' 2>/dev/null || true)"
-  if [[ -n "$blocked" ]]; then
-    status="blocked"
-    severity="WARNING"
-  elif [[ "$exit_code" != "0" && -n "$exit_code" ]] || [[ -n "$error_marker" ]]; then
+# Status + severity. Claude Code fires PostToolUse only on success and
+# PostToolUseFailure on any failure (hook-deny, tool-raised error,
+# etc), so phase determines status directly without reading
+# tool_response. Normalise the inbound phase label.
+case "$PHASE" in
+  pre)
+    status="ok"
+    severity="INFO"
+    phase_out="pre"
+    ;;
+  post)
+    status="ok"
+    severity="INFO"
+    phase_out="post"
+    ;;
+  post-failure)
     status="error"
     severity="WARNING"
-  fi
-fi
+    phase_out="post"
+    ;;
+  *)
+    status="ok"
+    severity="INFO"
+    phase_out="$PHASE"
+    ;;
+esac
 
 # Build the payload. Core fields first, then sidecar.
 payload="$(jq -nc \
@@ -118,7 +124,7 @@ payload="$(jq -nc \
   --arg link "${session_id:-$request_id}" \
   --arg request_id "$request_id" \
   --arg tool_name "$tool_name" \
-  --arg phase "$PHASE" \
+  --arg phase "$phase_out" \
   --arg status "$status" \
   --arg file_path "$file_path" \
   --arg command "$command_redacted" \

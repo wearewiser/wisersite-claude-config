@@ -21,6 +21,17 @@
           }
         ]
       }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/activity-log.sh post-failure"
+          }
+        ]
+      }
     ]
   }
 }
