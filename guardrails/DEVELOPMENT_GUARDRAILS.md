@@ -99,8 +99,8 @@ This file loads into every Claude session started under `~/Projects/Wiser/`, inc
 - Scope every query to the tenant's own dataset. Prefer parameterised, tenant-bound
   query builders over hand-written SQL.
 - No endpoint, batch job, or admin path returns multi-tenant results without explicit
-  justification authorised by a named human and recorded in the audit log (destination
-  tracked in WP23-546).
+  justification authorised by a named human and recorded in the audit log (Cloud
+  Logging log `devl-claude-agent-activity` in devl; prod log to follow).
 - MUST add tests: a request as tenant A can never read tenant B; a query missing a
   tenant scope is rejected. Failing these tests will block merge (CI).
 
@@ -154,9 +154,13 @@ This file loads into every Claude session started under `~/Projects/Wiser/`, inc
 - Every agent tool use is logged: ticket -> actions -> PR -> reviewer -> merge ->
   deployment -> approver.
 - The audit log is the primary evidence source during incident assessment (see 13).
-- Destination for the audit log is tracked in WP23-546; until it lands, the signals
-  live scattered across GitHub audit, Jira history, CircleCI logs and local Claude
-  Code session transcripts.
+- Destination is Cloud Logging log `devl-claude-agent-activity` in devl (prod log
+  to follow once the pattern lands). GitHub, Jira and CircleCI remain source of
+  truth for their own events; the log carries a copy with a link.
+- Payload shape, action enum, severity mapping, and the command-string redaction
+  rules are pinned in `schemas/activity_log.md`; writers in any language cite it.
+- Incident lookup query: `logName="projects/wiser-mainframe/logs/devl-claude-agent-activity"
+  AND jsonPayload.ticket_id="WP23-NNN"` in Logs Explorer.
 
 ## 12. Enforcement layers (Appendix C)
 

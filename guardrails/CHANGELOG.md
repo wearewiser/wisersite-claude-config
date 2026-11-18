@@ -21,6 +21,35 @@ Related ticket for versioning + assessment: WP23-509.
 
 ---
 
+## v0.6: 2026-11-18
+
+Audit-log destination named; sections 5.3 and 11 updated to point at the live Cloud Logging log instead of the WP23-546 placeholder.
+
+**PR:** TBC (fill after open).
+**Author:** John Zissimou.
+
+**Added:**
+- `schemas/activity_log.md` at the repo root: the pinned single source of truth for payload shape, closed `action` enum, severity mapping, and command-string redaction rules. Any current or future writer in any language cites it.
+- `.claude/hooks/activity-log.sh`: shared `PreToolUse` + `PostToolUse` hook that writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, under the invoking developer's gcloud ADC. Redacts secrets out of shell command strings before capping at 500 characters; exits 0 on every failure path so it never fails a user's tool call; emits a one-line stderr warning on the first write failure per session so broken auth is not silent.
+- `.claude/settings.json`: shared Claude Code settings file wiring the two hooks for every repo via the existing symlink distribution.
+- `.claude/hooks/README.md`: hook documentation covering behaviour, prerequisites, off-switch, and troubleshooting.
+- `setup.sh` pre-flight warning when `gcloud` is missing or ADC is not configured.
+- `README.md` paragraph under "How it works" explaining the hook, its destination, and the `CLAUDE_ACTIVITY_LOG=off` off-switch.
+
+**Changed:**
+- Section 5.3: audit-log destination now names Cloud Logging log `devl-claude-agent-activity` directly (devl; prod log to follow), replacing the `WP23-546` tracking placeholder.
+- Section 11: destination clause rewritten to name the log directly; adds a pointer to `schemas/activity_log.md` as the shape source of truth; adds the incident-lookup Logs Explorer query so §13 scope assessment is one-step.
+
+**Context:**
+- WP23-546. Scoping and resolutions captured on ticket comments 56784, 56795, 56796, 56797, 56798.
+- WP23-551 (Mikey) provisioned the devl log bucket, sink, exclusion, and `roles/logging.logWriter` on `devops@wiser-mainframe` on 2026-11-12.
+- Reviewer roles: ticket assignee plus Lachlan Shaw-Stewart (schema / content), Ian Moss (writer architecture).
+- Out-of-scope follow-ups raised: WP23-639 for CI-side tool-use capture (Sprint 10); a separate ticket to provision `prod-claude-agent-activity` once the devl pattern is proven.
+
+**Score impact:** expected to move audit and logging from 1/5 on the next assessment-matrix run under WP23-509; confirm retroactively.
+
+---
+
 ## v0.5: 2026-11-05
 
 Added four AI-feature guardrails; applied Patrick's, Lachie's and Ian's review feedback on the existing sections; centralised the file into `wisersite-claude-config`.
