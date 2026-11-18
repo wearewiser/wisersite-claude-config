@@ -37,6 +37,11 @@
 {"name": "Non-mysql -p flag left untouched", "input": "ssh -p 2222 user@host", "expected": "ssh -p 2222 user@host"}
 {"name": "docker -p port flag left untouched", "input": "docker run -p 8080:80 nginx", "expected": "docker run -p 8080:80 nginx"}
 {"name": "Multiline quoted env value fully redacted", "input": "SECRET=\"first\nsecond\nthird\" ./run.sh", "expected": "SECRET=\"[redacted]\" ./run.sh"}
+{"name": "curl -u quoted credentials with space fully redacted", "input": "curl -u 'admin:first SYNTHETIC_TAIL' https://example.invalid", "expected": "curl -u [redacted] https://example.invalid"}
+{"name": "Flag with multiple whitespace separator fully redacted", "input": "client --password   SYNTHETIC_TAIL run", "expected": "client --password   [redacted] run"}
+{"name": "Flag with escaped quote in quoted value fully redacted", "input": "client --password \"first\\\"SYNTHETIC_TAIL\" run", "expected": "client --password [redacted] run"}
+{"name": "JSON password with escaped quote fully redacted", "input": "curl -d '{\"password\":\"first\\\"SYNTHETIC_TAIL\"}' https://api/", "expected": "curl -d '{\"password\":\"[redacted]\"}' https://api/"}
+{"name": "KEY=value with escaped quote fully redacted", "input": "SECRET=\"first\\\"SYNTHETIC_TAIL\" ./run.sh", "expected": "SECRET=\"[redacted]\" ./run.sh"}
 {"name": "Heredoc body with KEY=value redacted (multi-line slurp)", "input": "cat > .env <<EOF\nDATABASE_URL=postgres://u:p@h/d\nAPI_KEY=abc123\nEOF", "expected": "cat > .env <<EOF\nDATABASE_URL=[redacted]\nAPI_KEY=[redacted]\nEOF"}
 {"name": "ordinary KEY=value without secret keyword passes through", "input": "LANG=en_GB.UTF-8 npm start", "expected": "LANG=en_GB.UTF-8 npm start"}
 {"name": "literal word 'token' as argument passes through", "input": "git log --grep 'auth token flow'", "expected": "git log --grep 'auth token flow'"}

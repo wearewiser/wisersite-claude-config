@@ -45,14 +45,17 @@ perl -0777 -pe '
   # first; this catches Bearer tokens anywhere else in the command.
   s/\bBearer\s+[A-Za-z0-9_\-\.=]+/Bearer [redacted]/gi;
 
-  # curl -u user:pass form.
-  s/(-u\s+)[^\s]+/${1}[redacted]/g;
+  # curl -u user:pass form. Handles quoted argument too, so a password
+  # containing whitespace does not leak its suffix after the first space.
+  s/(-u\s+)(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s]+)/${1}[redacted]/g;
 
   # Flag forms: --password, --token, --secret, --api-key, --auth, --credential.
-  # Alternation handles quoted-with-spaces (incl. multi-word values) and
-  # the unquoted form; quoted branch is tried first so spaces inside
-  # quotes do not short-circuit the match.
-  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)[=\s])(?:(["\x27])(?:(?!\2)[\s\S])*\2|[^\s"\x27]+)/${1}[redacted]/gi;
+  # Separator accepts = or one-or-more whitespace characters, so repeated
+  # spaces between flag and value do not bypass. Quoted body handles
+  # backslash-escaped quotes in both styles so a value like first then
+  # backslash-quote tail is consumed in full; the unquoted branch is only
+  # tried when no quote follows the separator.
+  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)(?:=|\s+))(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s"\x27]+)/${1}[redacted]/gi;
 
   # MySQL attached short-form password: -pPASSWORD (never -p<space>PASSWORD,
   # which mysql treats as a prompt). Scoped to mysql / mysqldump contexts
@@ -60,14 +63,17 @@ perl -0777 -pe '
   s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(\S+)/${1}-p[redacted]/gi;
 
   # JSON embedded in shell: "key":"value" where key contains a keyword.
-  s/("(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)"\s*:\s*)"[^"]+"/${1}"[redacted]"/gi;
+  # Value body accepts backslash-escaped characters so an escaped quote
+  # (\") inside the string does not end the match prematurely.
+  s/("(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)"\s*:\s*)"(?:\\.|[^"])*"/${1}"[redacted]"/gi;
 
   # KEY=value env assignments where the name contains a keyword anywhere,
   # or IS the keyword itself. \w* zero-or-more on either side matches
   # bare TOKEN / SECRET / KEY as well as GITHUB_TOKEN / AWS_SECRET_ACCESS_KEY.
   # Quoted (any quote style) first, then unquoted. Quoted body uses
   # [\s\S] rather than . so multi-line values across heredocs do not
-  # slip through.
-  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:(?!\2)[\s\S])*\2/${1}${2}[redacted]${2}/gi;
+  # slip through; backslash-escaped characters are consumed whole so an
+  # escaped quote inside the value does not terminate the match.
+  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:\\.|(?!\2)[\s\S])*\2/${1}${2}[redacted]${2}/gi;
   s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27])[^\s;&|]+/${1}[redacted]/gi;
 '
