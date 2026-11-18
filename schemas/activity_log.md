@@ -112,7 +112,7 @@ Every change to the redaction rules above must ship with an updated test-vector 
 
 Two entries are emitted per tool call:
 
-- A `PreToolUse` entry (`phase = pre`, `status = ok`) when the tool call starts.
+- A `PreToolUse` entry (`phase = pre`, `status` omitted) when the tool call starts.
 - Either a `PostToolUse` entry on success (`phase = post`, `status = ok`) or a `PostToolUseFailure` entry on failure (`phase = post`, `status = error`). A successful call never emits both.
 
 The two entries share `request_id`, which is sourced directly from the Claude Code hook input's `tool_use_id` field (verified authoritative on the late-2026 upstream schema, https://code.claude.com/docs/en/hooks.md). A `PreToolUse` with no matching `post` entry means the call was blocked or the session terminated between pre and post; the gap itself is the signal. Investigators query by `jsonPayload.request_id` to pair entries.
