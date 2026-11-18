@@ -46,7 +46,7 @@ Entries are JSON. Core fields are required for every entry; sidecar fields are o
 | `tool_name` | string | `action = tool_use` | Which tool Claude invoked (e.g. `Bash`, `Edit`, `Read`, `Write`). |
 | `phase` | enum string | `action = tool_use` | `pre` or `post`. Distinguishes the two entries emitted per tool call. |
 | `status` | enum string | `action = tool_use`, `phase = post` | `ok` on `PostToolUse`, `error` on `PostToolUseFailure`. A blocked call emits no post entry at all; the gap (a pre with no matching post) is the signal. |
-| `file_path` | string | `action = tool_use`, tool reads / edits / writes a file | The target path from `tool_input.file_path` (or `tool_input.path`). Before / after text is never logged. |
+| `file_path` | string | `action = tool_use`, tool reads / edits / writes a file | The target path from `tool_input.file_path`. This is the only field name on current Claude Code (verified against the upstream hooks reference); legacy `.path` is not read. Before / after text is never logged. |
 | `command` | string | `action = tool_use`, `tool_name = Bash` | Shell command string from `tool_input.command`, after the redaction pass below. Capped at 500 characters post-redaction. |
 
 The hook lifts only `file_path` and `command` from `tool_input` and drops every other `tool_input` field. Tool output (stdout, stderr, exit code, returned content) is never logged.
@@ -69,12 +69,13 @@ CI-side `tool_use` capture is tracked on WP23-639 (Sprint 10).
 
 Writers must stamp Cloud Logging severity consistently with the table below so alert policies can key off `severity` without knowing the writer.
 
-| Entry | Severity | Rationale |
-| --- | --- | --- |
-| `tool_use` with `status = ok` (`PreToolUse` or successful `PostToolUse`) | `INFO` | Routine; no operator action needed. |
-| `tool_use` with `status = error` (`PostToolUseFailure`) | `WARNING` | The tool call failed; the user's session continues. No pager. |
-| `pr_opened` / `pr_reviewed` / `pr_merged` / `deployment_approved` | `INFO` | Routine audit trail. |
-| Write failure logged by the hook itself (first failure per session, stderr only) | `WARNING` | Not written to Cloud Logging; stderr only. Prevents silent failure. |
+| Entry | Severity | Status field | Rationale |
+| --- | --- | --- | --- |
+| `tool_use`, `phase = pre` (`PreToolUse`) | `INFO` | omitted | Marks that a tool call started; status is populated only when the call completes. |
+| `tool_use`, `phase = post`, `status = ok` (`PostToolUse`) | `INFO` | `ok` | Routine; no operator action needed. |
+| `tool_use`, `phase = post`, `status = error` (`PostToolUseFailure`) | `WARNING` | `error` | The tool call failed; the user's session continues. No pager. |
+| `pr_opened` / `pr_reviewed` / `pr_merged` / `deployment_approved` | `INFO` | omitted | Routine audit trail. |
+| Write failure logged by the hook itself (first failure per session, stderr only) | `WARNING` | n/a | Not written to Cloud Logging; stderr only. Prevents silent failure. |
 
 ## Command-string redaction
 

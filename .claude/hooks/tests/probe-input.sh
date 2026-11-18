@@ -43,7 +43,8 @@
 #   - .tool_use_id         present? paired between a pre entry and its
 #                          matching post entry?
 #   - .tool_input.command  present for Bash calls?
-#   - .tool_input.file_path or .path present for Read/Edit/Write?
+#   - .tool_input.file_path present for Read/Edit/Write? (upstream
+#     reference confirms this is the only field name; no .path alias.)
 #   - .tool_response       shape on post entries (exit_code, stdout,
 #                          stderr, error, blocked flags)?
 #
