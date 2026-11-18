@@ -25,7 +25,7 @@ perl -0777 -pe '
   s/\bghs_[A-Za-z0-9_]+/ghs_[redacted]/g;
   s/\bgho_[A-Za-z0-9_]+/gho_[redacted]/g;
   s/\bgithub_pat_[A-Za-z0-9_]+/github_pat_[redacted]/g;
-  s/\bxox[bp]-[A-Za-z0-9\-]+/xox[redacted]/g;
+  s/\bxox[A-Za-z]-[A-Za-z0-9\-]+/xox[redacted]/g;
   s/\bAKIA[A-Z0-9]{16}/AKIA[redacted]/g;
   s/\bAIza[A-Za-z0-9_\-]+/AIza[redacted]/g;
   s/\bya29\.[A-Za-z0-9_\-]+/ya29.[redacted]/g;

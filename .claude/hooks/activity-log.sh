@@ -128,6 +128,13 @@ if [[ -n "$session_id" ]]; then
   actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${session_id}"
   if [[ ! -s "$actor_cache" ]]; then
     ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
+    # If gh failed (not installed, not authenticated, network down) the
+    # redirect still left an empty file. Fill it with the $USER fallback
+    # so later calls in this session skip the retry instead of running
+    # `gh api` on every tool call for the rest of the session.
+    if [[ ! -s "$actor_cache" ]]; then
+      ( umask 077 && printf '%s' "${USER:-unknown}" > "$actor_cache" ) || true
+    fi
   fi
   actor="$(cat "$actor_cache" 2>/dev/null || true)"
 else

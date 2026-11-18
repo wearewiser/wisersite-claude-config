@@ -12,6 +12,9 @@
 {"name": "Bearer token inside Authorization header fully redacted (case insensitive)", "input": "curl -H 'authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'", "expected": "curl -H 'authorization: [redacted]'"}
 {"name": "JWT eyJ in token= env fully redacted (env rule wins), surrounding quotes preserved", "input": "echo 'token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef'", "expected": "echo 'token=[redacted]'"}
 {"name": "Unquoted KEY=value inside shell single quotes preserves closing quote", "input": "sh -c 'export API_KEY=abc123xyz; ./run.sh'", "expected": "sh -c 'export API_KEY=[redacted]; ./run.sh'"}
+{"name": "Slack xoxs- workspace token redacted via prefix", "input": "export SLACK=xoxs-1234567890-abcdefghij", "expected": "export SLACK=xox[redacted]"}
+{"name": "Slack xoxa- legacy token redacted standalone", "input": "echo Use xoxa-9876543210-abcdef when debugging", "expected": "echo Use xox[redacted] when debugging"}
+{"name": "Slack xoxe- ephemeral token redacted standalone", "input": "echo Using xoxe-1-abc-def-ghi", "expected": "echo Using xox[redacted]"}
 {"name": "URL credentials in postgres connection redacted", "input": "psql postgres://admin:supersecret@db.internal:5432/app", "expected": "psql postgres://[redacted]@db.internal:5432/app"}
 {"name": "URL credentials in https clone redacted", "input": "git clone https://john:mytoken@github.com/wearewiser/x.git", "expected": "git clone https://[redacted]@github.com/wearewiser/x.git"}
 {"name": "DATABASE_URL env redacted", "input": "DATABASE_URL=postgres://admin:supersecret@db:5432/app pnpm run migrate", "expected": "DATABASE_URL=[redacted] pnpm run migrate"}

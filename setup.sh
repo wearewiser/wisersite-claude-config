@@ -111,16 +111,20 @@ echo "Symlink created: $HOOKS_LINK -> $REPO_DIR/.claude/hooks"
 SETTINGS_MARKER='wisersite-claude-config setup.sh'
 WRITE_SHARED_SETTINGS=yes
 if [ -f "$SHARED_SETTINGS" ]; then
-  if ! grep -q "\"_managed_by\":[[:space:]]*\"$SETTINGS_MARKER\"" "$SHARED_SETTINGS" 2>/dev/null; then
+  # Marker check via jq rather than grep so the literal . in setup.sh
+  # cannot false-match a regex wildcard and the stored value is compared
+  # as a JSON string rather than a line of text.
+  existing_marker="$(jq -r '._managed_by // ""' "$SHARED_SETTINGS" 2>/dev/null || true)"
+  if [ "$existing_marker" != "$SETTINGS_MARKER" ]; then
     WRITE_SHARED_SETTINGS=no
     echo "Warning: $SHARED_SETTINGS exists but is not managed by this script"
-    echo "         (missing the _managed_by marker). To avoid clobbering"
-    echo "         personal settings, setup.sh is leaving it in place."
-    echo "         To enable the Claude activity-log hook: either move"
-    echo "         your file aside and re-run setup.sh, or copy the three"
-    echo "         hook entries from .claude/settings.example.json into"
-    echo "         your settings.json by hand (and replace <HOME> with"
-    echo "         your real home path)."
+    echo "         (missing or mismatched _managed_by marker). To avoid"
+    echo "         clobbering personal settings, setup.sh is leaving it"
+    echo "         in place. To enable the Claude activity-log hook:"
+    echo "         either move your file aside and re-run setup.sh, or"
+    echo "         copy the three hook entries from .claude/settings.example.json"
+    echo "         into your settings.json by hand (and replace <HOME>"
+    echo "         with your real home path)."
   fi
 fi
 
