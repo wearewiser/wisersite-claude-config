@@ -14,8 +14,9 @@
 # subscript on @1 and silently eats the surrounding content.
 
 perl -0777 -pe '
-  # Private-key blocks (multi-line).
-  s/-----BEGIN [A-Z ]+PRIVATE KEY-----.*?-----END [A-Z ]+PRIVATE KEY-----/[redacted-private-key]/gs;
+  # Private-key blocks (multi-line). Label (RSA, EC, OPENSSH, etc) is
+  # optional so unlabelled PKCS#8 blocks are also caught.
+  s/-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+)?PRIVATE KEY-----/[redacted-private-key]/g;
 
   # Known-prefix tokens. sk- requires a word boundary and min 20 chars
   # of suffix so task-, disk-, and similar substrings are not caught.
@@ -48,7 +49,15 @@ perl -0777 -pe '
   s/(-u\s+)[^\s]+/${1}[redacted]/g;
 
   # Flag forms: --password, --token, --secret, --api-key, --auth, --credential.
-  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)[=\s])["\x27]?[^\s"\x27]+["\x27]?/${1}[redacted]/gi;
+  # Alternation handles quoted-with-spaces (incl. multi-word values) and
+  # the unquoted form; quoted branch is tried first so spaces inside
+  # quotes do not short-circuit the match.
+  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)[=\s])(?:(["\x27])(?:(?!\2)[\s\S])*\2|[^\s"\x27]+)/${1}[redacted]/gi;
+
+  # MySQL attached short-form password: -pPASSWORD (never -p<space>PASSWORD,
+  # which mysql treats as a prompt). Scoped to mysql / mysqldump contexts
+  # so a general -p flag (port, path) in other commands is not touched.
+  s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(\S+)/${1}-p[redacted]/gi;
 
   # JSON embedded in shell: "key":"value" where key contains a keyword.
   s/("(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)"\s*:\s*)"[^"]+"/${1}"[redacted]"/gi;
@@ -56,7 +65,9 @@ perl -0777 -pe '
   # KEY=value env assignments where the name contains a keyword anywhere,
   # or IS the keyword itself. \w* zero-or-more on either side matches
   # bare TOKEN / SECRET / KEY as well as GITHUB_TOKEN / AWS_SECRET_ACCESS_KEY.
-  # Quoted (any quote style) first, then unquoted.
-  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:(?!\2).)*\2/${1}${2}[redacted]${2}/gi;
+  # Quoted (any quote style) first, then unquoted. Quoted body uses
+  # [\s\S] rather than . so multi-line values across heredocs do not
+  # slip through.
+  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:(?!\2)[\s\S])*\2/${1}${2}[redacted]${2}/gi;
   s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27])[^\s;&|]+/${1}[redacted]/gi;
 '

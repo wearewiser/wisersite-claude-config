@@ -40,13 +40,6 @@ if [[ -z "$input" ]]; then
   exit 0
 fi
 
-# Extract ticket from branch; skip silently when there's no WP23-NNN.
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-ticket_id="$(printf '%s' "$branch" | grep -oE 'WP23-[0-9]+' | head -1 || true)"
-if [[ -z "$ticket_id" ]]; then
-  exit 0
-fi
-
 # Core fields from the hook input. Only tool_name, session_id, and
 # tool_use_id are lifted from the envelope. file_path / command come
 # from tool_input and are redacted below. Nothing else from tool_input
@@ -63,10 +56,56 @@ raw_command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/de
 # for the first-failure-per-session stderr warning.
 request_id="$tool_use_id"
 
-# Actor: gh login if available, cached per session. Fall back to $USER.
-actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login"
+# Ticket resolution, keyed by tool_use_id so the pre entry and its
+# matching post entry stay attached to the same ticket even if the
+# user switches branches between the two phases. Pre writes the cache;
+# post reads and deletes it, falling back to the current branch if the
+# cache was not captured (hook not wired at pre time, cache evicted).
+if [[ -n "$tool_use_id" ]]; then
+  ticket_cache="${SESSION_SENTINEL_DIR}/wiser-ticket-${tool_use_id}"
+else
+  ticket_cache=""
+fi
+
+extract_ticket_from_branch() {
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  printf '%s' "$branch" | grep -oE 'WP23-[0-9]+' | head -1 || true
+}
+
+ticket_id=""
+if [[ "$PHASE" == "pre" ]]; then
+  ticket_id="$(extract_ticket_from_branch)"
+  if [[ -z "$ticket_id" ]]; then
+    exit 0
+  fi
+  if [[ -n "$ticket_cache" ]]; then
+    printf '%s' "$ticket_id" > "$ticket_cache" 2>/dev/null || true
+  fi
+else
+  if [[ -n "$ticket_cache" && -s "$ticket_cache" ]]; then
+    ticket_id="$(cat "$ticket_cache" 2>/dev/null || true)"
+    rm -f "$ticket_cache" 2>/dev/null || true
+  fi
+  if [[ -z "$ticket_id" ]]; then
+    ticket_id="$(extract_ticket_from_branch)"
+  fi
+  if [[ -z "$ticket_id" ]]; then
+    exit 0
+  fi
+fi
+
+# Actor: gh login if available, cached per session so switching accounts
+# in another session does not leak the old login here, and so shared
+# /tmp on multi-user systems does not cross-contaminate. Fall back to
+# $USER when gh is unavailable.
+if [[ -n "$session_id" ]]; then
+  actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${session_id}"
+else
+  actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-nosession"
+fi
 if [[ ! -s "$actor_cache" ]]; then
-  gh api user -q .login 2>/dev/null > "$actor_cache" || true
+  ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
 fi
 actor="$(cat "$actor_cache" 2>/dev/null || true)"
 if [[ -z "$actor" ]]; then
@@ -78,10 +117,15 @@ timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Redact the command string, then cap at 500 characters. The order is
 # load-bearing: redact first so a token cut by truncation cannot slip
 # through. Redaction rules live in lib/redact-command.sh and are pinned
-# in schemas/activity_log.md.
+# in schemas/activity_log.md. On any redaction failure, log a marker
+# instead of the raw command so a missing perl or broken lib cannot
+# leak secrets.
 command_redacted=""
 if [[ -n "$raw_command" ]]; then
-  command_redacted="$(printf '%s' "$raw_command" | "$HOOK_DIR/lib/redact-command.sh" 2>/dev/null || printf '%s' "$raw_command")"
+  command_redacted="$(printf '%s' "$raw_command" | "$HOOK_DIR/lib/redact-command.sh" 2>/dev/null)"
+  if [[ -z "$command_redacted" ]]; then
+    command_redacted="[redaction-failed]"
+  fi
 
   if (( ${#command_redacted} > 500 )); then
     command_redacted="${command_redacted:0:487}...[truncated]"

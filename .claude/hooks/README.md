@@ -8,11 +8,11 @@ Writes an entry to Cloud Logging for every Claude tool call so §5.3 and §11 of
 
 ### What it does
 
-- Fires on `PreToolUse` and `PostToolUse` (every tool, matcher `.*`).
-- Extracts the ticket id from the current git branch name (anything matching `WP23-\d+`). Branches without a ticket id are silently ignored, so non-ticket work does not pollute the log.
-- Resolves the actor from `gh auth status` (cached once per session). Falls back to `$USER`.
+- Fires on `PreToolUse`, `PostToolUse`, and `PostToolUseFailure` (every tool, matcher `.*`).
+- Extracts the ticket id from the current git branch name (anything matching `WP23-\d+`). The ticket is cached at pre keyed by `tool_use_id` and re-used at post, so branch switches between the two phases do not split the pair across tickets. Branches without a ticket id are silently ignored.
+- Resolves the actor from `gh auth status`, cached per `session_id` (not globally). Falls back to `$USER`.
 - Redacts the shell command string before capping it at 500 characters. Full rule list in `../../schemas/activity_log.md`.
-- Emits via `gcloud logging write` under the invoking developer's gcloud ADC. No service account key is distributed to laptops.
+- Emits via `gcloud logging write` under the invoking developer's **active `gcloud auth` account** (same store `gcloud logging write` reads from). No service account key is distributed to laptops.
 
 ### Payload shape
 
@@ -20,7 +20,7 @@ Defined in `schemas/activity_log.md` at the repo root. The hook only lifts `file
 
 ### Non-blocking contract
 
-The hook never fails a Claude tool call. Every failure path exits 0. On the first write failure in a session a one-line warning goes to stderr so a broken ADC or revoked grant does not stay silent; subsequent failures in the same session are silent.
+The hook never fails a Claude tool call. Every failure path exits 0. On the first write failure in a session a one-line warning goes to stderr so a broken gcloud auth or revoked grant does not stay silent; subsequent failures in the same session are silent.
 
 ### Local off-switch
 
@@ -29,11 +29,11 @@ Set `CLAUDE_ACTIVITY_LOG=off` in your shell to mute the hook on this machine. Us
 ### Prerequisites
 
 - `jq` (JSON parsing).
-- `gcloud` (writer; needs an active ADC for `wiser-mainframe`).
+- `gcloud` (writer; needs an active account via `gcloud auth login`, which is what `gcloud logging write` uses).
 - `perl` (multi-line redaction).
 - `gh` (actor resolution, optional).
 
-`setup.sh` warns at install time if `gcloud` or ADC is missing.
+`setup.sh` warns at install time if `gcloud` is missing or no active account is configured.
 
 ### Testing the redaction rules
 

@@ -18,10 +18,10 @@ Field names, enum values, severity mapping, and the redaction regex list are pin
 
 | Env | Log name | Project | Writer SA (CI / Cloud Run) | Writer identity (local) |
 | --- | --- | --- | --- | --- |
-| devl | `devl-claude-agent-activity` | `wiser-mainframe` | `devops@wiser-mainframe.iam.gserviceaccount.com` | invoking developer's gcloud ADC |
+| devl | `devl-claude-agent-activity` | `wiser-mainframe` | `devops@wiser-mainframe.iam.gserviceaccount.com` | invoking developer's active gcloud auth account |
 | prod | `prod-claude-agent-activity` (follow-up ticket) | `wiser-mainframe` | TBD | TBD |
 
-Local writes emit under the invoking developer's gcloud ADC; the `devops@` service account is reserved for CI or Cloud Run paths if and when they are wired.
+Local writes emit under the invoking developer's active gcloud auth account; the `devops@` service account is reserved for CI or Cloud Run paths if and when they are wired.
 
 ## Payload shape
 
@@ -104,7 +104,7 @@ Every change to the redaction rules above must ship with an updated test-vector 
 ## Write semantics
 
 - **Best-effort, non-blocking.** A write failure must never fail the user's tool call or block the Claude session. The hook catches every failure path and exits 0.
-- **First-failure visibility.** On the first write failure within a session, the hook emits a one-line warning to stderr so a broken ADC or revoked grant does not stay silent. Subsequent failures within the same session stay silent.
+- **First-failure visibility.** On the first write failure within a session, the hook emits a one-line warning to stderr so a broken gcloud auth or revoked grant does not stay silent. Subsequent failures within the same session stay silent.
 - **No retry.** Matches the `wiser_shared.logs` convention (stdlib stdout, no buffering, no retry).
 
 ## Correlation

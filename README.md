@@ -14,9 +14,15 @@ wisersite-claude-config/
 │   ├── secrets-guardian.md
 │   └── ticket-planner.md
 ├── .claude/
-│   ├── settings.json                # shared Claude Code settings (hooks)
+│   ├── settings.example.json        # reference shape for the generated shared settings.json
 │   ├── hooks/                       # shared Claude Code hooks loaded by all repos
 │   │   ├── activity-log.sh
+│   │   ├── lib/
+│   │   │   └── redact-command.sh
+│   │   ├── tests/
+│   │   │   ├── redaction-vectors.jsonl
+│   │   │   ├── run-redaction-tests.sh
+│   │   │   └── probe-input.sh
 │   │   └── README.md
 │   └── skills/                      # user-invoked skills shared across repos
 │       └── user-story-writer/
@@ -45,13 +51,16 @@ wisersite-claude-config/
 
 Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates five symlinks under `~/Projects/Wiser/.claude/`:
+`setup.sh` creates six symlinks under `~/Projects/Wiser/.claude/`:
 
 - `agents/` -> this repo's `agents/` folder
 - `skills/` -> this repo's `.claude/skills/` folder
 - `adr/` -> this repo's `docs/ADR/` folder
 - `guardrails/` -> this repo's `guardrails/` folder
+- `hooks/` -> this repo's `.claude/hooks/` folder
 - `PROJECT_KNOWLEDGE.md` -> this repo's `PROJECT_KNOWLEDGE.md` file (file-level symlink)
+
+It also writes `~/Projects/Wiser/.claude/settings.json` (generated, not symlinked) that points at the hooks with absolute paths; see the Activity-log hook section below for why.
 
 It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, ADRs, guardrails, and project knowledge are always up to date with no manual steps.
 
@@ -66,9 +75,11 @@ Repos that want Claude to consult the shared ADRs should point at them from thei
 
 ### Activity-log hook
 
-A shared `PreToolUse` / `PostToolUse` hook (`.claude/hooks/activity-log.sh`) writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, so guardrails §5.3 and §11 have a real audit trail to query during an incident. The hook extracts the ticket id from the current git branch (skipping silently on non-ticket branches), redacts secrets out of shell command strings, and never fails a tool call. Payload shape is pinned in `schemas/activity_log.md`; hook README is at `.claude/hooks/README.md`.
+A shared `PreToolUse`, `PostToolUse`, and `PostToolUseFailure` hook (`.claude/hooks/activity-log.sh`) writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, so guardrails §5.3 and §11 have a real audit trail to query during an incident. The hook extracts the ticket id from the current git branch (skipping silently on non-ticket branches), redacts secrets out of shell command strings, and never fails a tool call. Payload shape is pinned in `schemas/activity_log.md`; hook README is at `.claude/hooks/README.md`.
 
-Writes run under the invoking developer's gcloud ADC, so no service account key is distributed to laptops. Prerequisites: `gcloud` on PATH and an active ADC authenticated against `wiser-mainframe`. `setup.sh` warns at install time if either is missing. Local off-switch: `export CLAUDE_ACTIVITY_LOG=off`.
+The hook fires in every Wiser repo, not just this one. Claude Code sessions walk up the directory tree from cwd looking for `.claude/settings.json`, and `~/Projects/Wiser/.claude/settings.json` is on that path for every repo under `~/Projects/Wiser/`. `setup.sh` writes that shared settings.json with absolute command paths pointing at the symlinked hooks dir, so the commands resolve regardless of the session's cwd. The in-repo `.claude/settings.example.json` is a reference shape only; Claude Code does not load files with that name.
+
+Writes run under the invoking developer's active `gcloud auth` account (the same account that `gcloud logging write` uses). No service account key is distributed to laptops. Prerequisites: `gcloud` on PATH and an active account via `gcloud auth login`. `setup.sh` warns at install time if either is missing. Local off-switch: `export CLAUDE_ACTIVITY_LOG=off`.
 
 ### CI
 

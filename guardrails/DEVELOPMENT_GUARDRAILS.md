@@ -155,8 +155,13 @@ This file loads into every Claude session started under `~/Projects/Wiser/`, inc
   deployment -> approver.
 - The audit log is the primary evidence source during incident assessment (see 13).
 - Destination is Cloud Logging log `devl-claude-agent-activity` in devl (prod log
-  to follow once the pattern lands). GitHub, Jira and CircleCI remain source of
-  truth for their own events; the log carries a copy with a link.
+  to follow once the pattern lands).
+- **Current scope.** Only local Claude tool-use events on ticket branches are
+  captured today. PR opened, PR reviewed, PR merged, and deployment approved
+  are reserved action-enum values pending their own follow-up tickets (WP23-639
+  covers CI-side tool-use capture; prod + mirror tickets to follow). For those
+  events, consult GitHub, Jira, and CircleCI directly as the source of truth
+  until the mirror lands.
 - Payload shape, action enum, severity mapping, and the command-string redaction
   rules are pinned in `schemas/activity_log.md`; writers in any language cite it.
 - Incident lookup query: `logName="projects/wiser-mainframe/logs/devl-claude-agent-activity"

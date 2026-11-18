@@ -8,6 +8,8 @@ AGENTS_LINK="$WISER_CLAUDE_DIR/agents"
 SKILLS_LINK="$WISER_CLAUDE_DIR/skills"
 ADR_LINK="$WISER_CLAUDE_DIR/adr"
 GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
+HOOKS_LINK="$WISER_CLAUDE_DIR/hooks"
+SHARED_SETTINGS="$WISER_CLAUDE_DIR/settings.json"
 PROJECT_KNOWLEDGE_LINK="$WISER_CLAUDE_DIR/PROJECT_KNOWLEDGE.md"
 ZSHRC="$HOME/.zshrc"
 
@@ -74,6 +76,65 @@ fi
 
 ln -s "$REPO_DIR/guardrails" "$GUARDRAILS_LINK"
 echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
+
+# Create hooks symlink (activity-log + any future shared hooks). Mirrors
+# the shape of the four symlinks above. Hooks are discovered by Claude
+# Code sessions in any Wiser repo via the shared settings.json below.
+if [ -L "$HOOKS_LINK" ]; then
+  echo "Removing existing symlink at $HOOKS_LINK"
+  rm "$HOOKS_LINK"
+elif [ -d "$HOOKS_LINK" ]; then
+  echo "Error: $HOOKS_LINK exists as a real directory. Move or delete it first."
+  exit 1
+fi
+
+ln -s "$REPO_DIR/.claude/hooks" "$HOOKS_LINK"
+echo "Symlink created: $HOOKS_LINK -> $REPO_DIR/.claude/hooks"
+
+# Shared Claude Code settings.json distributed to every Wiser repo via
+# the parent-directory walk: a session in any repo under ~/Projects/Wiser/
+# picks up ~/Projects/Wiser/.claude/settings.json automatically.
+#
+# Generated here (not symlinked) because the command strings must be
+# absolute so hooks resolve regardless of the session's cwd; relative
+# paths under settings.json resolve against the session's own project
+# root, which breaks the hooks for every repo except this one.
+#
+# Written atomically so a concurrent re-run never leaves a half-written
+# file that Claude Code could try to parse.
+SETTINGS_TMP="$(mktemp "$WISER_CLAUDE_DIR/settings.json.XXXXXX")"
+cat > "$SETTINGS_TMP" <<EOF
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "$HOOKS_LINK/activity-log.sh pre" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "$HOOKS_LINK/activity-log.sh post" }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "$HOOKS_LINK/activity-log.sh post-failure" }
+        ]
+      }
+    ]
+  }
+}
+EOF
+mv "$SETTINGS_TMP" "$SHARED_SETTINGS"
+echo "Shared settings.json written: $SHARED_SETTINGS"
 
 # Create project-knowledge symlink (file-level, not folder). Unlike the four
 # folder symlinks above, PROJECT_KNOWLEDGE.md is a single file at the repo
@@ -267,17 +328,30 @@ echo ""
 # Non-fatal. The hook itself is best-effort and exits 0 on missing tooling,
 # but warning here tells a new install why no entries will land until they
 # fix it.
+#
+# Checks the CLI-auth store (`gcloud auth list`), not ADC. The hook writes
+# via `gcloud logging write`, which authenticates using the active CLI
+# account; checking ADC here would mask the case where ADC is configured
+# but no CLI account is active (writes would silently fail).
 echo "Checking Claude activity-log hook prerequisites..."
 if ! command -v gcloud >/dev/null 2>&1; then
   echo "  Warning: gcloud is not on PATH. The Claude activity-log hook will"
   echo "           silently skip every write until gcloud is installed and"
   echo "           authenticated against the wiser-mainframe project."
-elif ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
-  echo "  Warning: no gcloud ADC configured. Run"
-  echo "           'gcloud auth application-default login' and set the project"
-  echo "           to wiser-mainframe before the Claude activity-log hook can write."
+elif ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q .; then
+  echo "  Warning: no active gcloud account. Run 'gcloud auth login' before"
+  echo "           the Claude activity-log hook can write. The hook passes"
+  echo "           --project=wiser-mainframe explicitly."
 else
-  echo "  gcloud + ADC: OK"
+  gcloud_project="$(gcloud config get-value project 2>/dev/null || true)"
+  if [ "$gcloud_project" != "wiser-mainframe" ]; then
+    echo "  Note: gcloud default project is '$gcloud_project', not 'wiser-mainframe'."
+    echo "        The hook passes --project=wiser-mainframe explicitly so writes"
+    echo "        still land; worth switching the default to avoid confusion"
+    echo "        when debugging unrelated gcloud commands."
+  else
+    echo "  gcloud auth + project: OK"
+  fi
 fi
 
 echo ""

@@ -28,6 +28,15 @@
 {"name": "Cookie header redacted", "input": "curl -H 'Cookie: session=abcXYZ123' https://api/", "expected": "curl -H 'Cookie: [redacted]' https://api/"}
 {"name": "Private-Token header redacted", "input": "curl -H 'Private-Token: glpat-abcdefghijk' https://gitlab/", "expected": "curl -H 'Private-Token: [redacted]' https://gitlab/"}
 {"name": "Private key block redacted (multi-line)", "input": "echo '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKC\ndeadbeef\n-----END RSA PRIVATE KEY-----'", "expected": "echo '[redacted-private-key]'"}
+{"name": "PKCS#8 unlabelled private key redacted", "input": "echo '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCB\n-----END PRIVATE KEY-----'", "expected": "echo '[redacted-private-key]'"}
+{"name": "EC private key redacted", "input": "echo '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBRxV\n-----END EC PRIVATE KEY-----'", "expected": "echo '[redacted-private-key]'"}
+{"name": "Quoted flag value with spaces fully redacted", "input": "client --password \"first second third\" run", "expected": "client --password [redacted] run"}
+{"name": "Single-quoted flag value with spaces fully redacted", "input": "client --token 'first second third' run", "expected": "client --token [redacted] run"}
+{"name": "MySQL -p attached password redacted", "input": "mysql -pSYNTHETIC_PASSWORD -e \"SELECT 1\"", "expected": "mysql -p[redacted] -e \"SELECT 1\""}
+{"name": "mysqldump -p attached password redacted", "input": "mysqldump -h db.internal -pSYNTHETIC_PASSWORD app > out.sql", "expected": "mysqldump -h db.internal -p[redacted] app > out.sql"}
+{"name": "Non-mysql -p flag left untouched", "input": "ssh -p 2222 user@host", "expected": "ssh -p 2222 user@host"}
+{"name": "docker -p port flag left untouched", "input": "docker run -p 8080:80 nginx", "expected": "docker run -p 8080:80 nginx"}
+{"name": "Multiline quoted env value fully redacted", "input": "SECRET=\"first\nsecond\nthird\" ./run.sh", "expected": "SECRET=\"[redacted]\" ./run.sh"}
 {"name": "Heredoc body with KEY=value redacted (multi-line slurp)", "input": "cat > .env <<EOF\nDATABASE_URL=postgres://u:p@h/d\nAPI_KEY=abc123\nEOF", "expected": "cat > .env <<EOF\nDATABASE_URL=[redacted]\nAPI_KEY=[redacted]\nEOF"}
 {"name": "ordinary KEY=value without secret keyword passes through", "input": "LANG=en_GB.UTF-8 npm start", "expected": "LANG=en_GB.UTF-8 npm start"}
 {"name": "literal word 'token' as argument passes through", "input": "git log --grep 'auth token flow'", "expected": "git log --grep 'auth token flow'"}
