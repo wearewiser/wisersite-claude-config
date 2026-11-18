@@ -29,6 +29,9 @@ trap 'exit 0' EXIT
 # gcloud auth is not silent, but repeated calls do not spam stderr.
 log_fail() {
   local reason="$1"
+  # Argument is already sanitised by the caller (or empty); callers must
+  # pass safe_session_id, not the raw session_id, so the sentinel path
+  # cannot escape $TMPDIR via a '/' or '..' in the untrusted value.
   local session_id="${2:-}"
   if [[ -n "$session_id" ]]; then
     local sentinel="${SESSION_SENTINEL_DIR}/wiser-activity-log-warned-${session_id}"
@@ -67,10 +70,19 @@ tool_use_id="$(printf '%s' "$input" | jq -r '.tool_use_id // empty' 2>/dev/null 
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
 raw_command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
 
+# Sanitised copies for use in temp-file paths. Upstream Claude Code
+# controls these values (session_id ~= UUID, tool_use_id = toolu_...)
+# so in practice they only contain safe characters, but anything that
+# is not alphanumeric / underscore / hyphen is collapsed to '_' as
+# defence in depth: a stray '/' or '..' would otherwise land a
+# sentinel outside $TMPDIR.
+safe_session_id="${session_id//[^a-zA-Z0-9_-]/_}"
+safe_tool_use_id="${tool_use_id//[^a-zA-Z0-9_-]/_}"
+
 # gcloud check deferred to here so log_fail can key the once-per-session
 # warning sentinel by the real session_id from the hook input.
 if ! command -v gcloud >/dev/null 2>&1; then
-  log_fail "gcloud not installed" "$session_id"
+  log_fail "gcloud not installed" "$safe_session_id"
 fi
 
 # Correlation id: tool_use_id is the authoritative shared id between a
@@ -85,7 +97,7 @@ request_id="$tool_use_id"
 # post reads and deletes it, falling back to the current branch if the
 # cache was not captured (hook not wired at pre time, cache evicted).
 if [[ -n "$tool_use_id" ]]; then
-  ticket_cache="${SESSION_SENTINEL_DIR}/wiser-ticket-${tool_use_id}"
+  ticket_cache="${SESSION_SENTINEL_DIR}/wiser-ticket-${safe_tool_use_id}"
 else
   ticket_cache=""
 fi
@@ -125,7 +137,7 @@ fi
 # each call) because a persistent nosession file would never invalidate
 # and a stale account would attach to every future call.
 if [[ -n "$session_id" ]]; then
-  actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${session_id}"
+  actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${safe_session_id}"
   if [[ ! -s "$actor_cache" ]]; then
     ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
     # If gh failed (not installed, not authenticated, network down) the
@@ -220,7 +232,7 @@ payload="$(jq -nc \
   2>/dev/null || true)"
 
 if [[ -z "$payload" ]]; then
-  log_fail "payload build failed" "$session_id"
+  log_fail "payload build failed" "$safe_session_id"
 fi
 
 # Write to Cloud Logging. Non-blocking: any failure drops to log_fail
@@ -230,7 +242,7 @@ if ! gcloud logging write devl-claude-agent-activity "$payload" \
   --severity="$severity" \
   --project=wiser-mainframe \
   --quiet 2>/dev/null; then
-  log_fail "gcloud logging write failed" "$session_id"
+  log_fail "gcloud logging write failed" "$safe_session_id"
 fi
 
 exit 0
