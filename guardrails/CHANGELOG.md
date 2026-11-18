@@ -25,7 +25,7 @@ Related ticket for versioning + assessment: WP23-509.
 
 Audit-log destination named; sections 5.3 and 11 updated to point at the live Cloud Logging log instead of the WP23-546 placeholder.
 
-**PR:** TBC (fill after open).
+**PR:** https://github.com/wearewiser/wisersite-claude-config/pull/15
 **Author:** John Zissimou.
 
 **Added:**

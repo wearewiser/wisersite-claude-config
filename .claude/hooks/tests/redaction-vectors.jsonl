@@ -6,11 +6,12 @@
 {"name": "github_pat_ in TOKEN= env fully redacted (env rule wins)", "input": "export TOKEN=github_pat_11AAAAAAA0abcDEFghiJKLmnoPQRstuVWXyz012345", "expected": "export TOKEN=[redacted]"}
 {"name": "github_pat_ standalone redacted via prefix", "input": "echo The token is github_pat_11AAAAAAA0abcDEFghiJKL and nothing else", "expected": "echo The token is github_pat_[redacted] and nothing else"}
 {"name": "AKIA access key redacted", "input": "aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE", "expected": "aws configure set aws_access_key_id AKIA[redacted]"}
-{"name": "AIza in query param key= fully redacted (env rule wins over prefix)", "input": "curl 'https://maps.googleapis.com/x?key=AIzaSyBAbcDefGhiJklMnoPqrStu'", "expected": "curl 'https://maps.googleapis.com/x?key=[redacted]"}
+{"name": "AIza in query param key= fully redacted (env rule wins over prefix), surrounding quotes preserved", "input": "curl 'https://maps.googleapis.com/x?key=AIzaSyBAbcDefGhiJklMnoPqrStu'", "expected": "curl 'https://maps.googleapis.com/x?key=[redacted]'"}
 {"name": "AIza standalone redacted via prefix", "input": "echo The google key is AIzaSyBAbcDefGhiJklMnoPqrStu please rotate", "expected": "echo The google key is AIza[redacted] please rotate"}
 {"name": "ya29 OAuth token inside Authorization header fully redacted", "input": "curl -H 'Authorization: Bearer ya29.a0AfH6SMBabcdefghij'", "expected": "curl -H 'Authorization: [redacted]'"}
 {"name": "Bearer token inside Authorization header fully redacted (case insensitive)", "input": "curl -H 'authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'", "expected": "curl -H 'authorization: [redacted]'"}
-{"name": "JWT eyJ in token= env fully redacted (env rule wins)", "input": "echo 'token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef'", "expected": "echo 'token=[redacted]"}
+{"name": "JWT eyJ in token= env fully redacted (env rule wins), surrounding quotes preserved", "input": "echo 'token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef'", "expected": "echo 'token=[redacted]'"}
+{"name": "Unquoted KEY=value inside shell single quotes preserves closing quote", "input": "sh -c 'export API_KEY=abc123xyz; ./run.sh'", "expected": "sh -c 'export API_KEY=[redacted]; ./run.sh'"}
 {"name": "URL credentials in postgres connection redacted", "input": "psql postgres://admin:supersecret@db.internal:5432/app", "expected": "psql postgres://[redacted]@db.internal:5432/app"}
 {"name": "URL credentials in https clone redacted", "input": "git clone https://john:mytoken@github.com/wearewiser/x.git", "expected": "git clone https://[redacted]@github.com/wearewiser/x.git"}
 {"name": "DATABASE_URL env redacted", "input": "DATABASE_URL=postgres://admin:supersecret@db:5432/app pnpm run migrate", "expected": "DATABASE_URL=[redacted] pnpm run migrate"}

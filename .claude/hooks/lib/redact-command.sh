@@ -75,5 +75,5 @@ perl -0777 -pe '
   # slip through; backslash-escaped characters are consumed whole so an
   # escaped quote inside the value does not terminate the match.
   s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:\\.|(?!\2)[\s\S])*\2/${1}${2}[redacted]${2}/gi;
-  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27])[^\s;&|]+/${1}[redacted]/gi;
+  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27])[^\s;&|"\x27]+/${1}[redacted]/gi;
 '

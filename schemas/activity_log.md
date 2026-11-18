@@ -99,7 +99,7 @@ After the redaction pass, the resulting command string is truncated to 500 chara
 
 ### Test vectors
 
-Every change to the redaction rules above must ship with an updated test-vector file (`activity-log/tests/redaction-vectors.jsonl`) and a sign-off from Lachie. Each vector pairs an input command with its expected redacted output.
+Every change to the redaction rules above must ship with an updated test-vector file (`.claude/hooks/tests/redaction-vectors.jsonl`) and a sign-off from Lachie. Each vector pairs an input command with its expected redacted output.
 
 ## Write semantics
 

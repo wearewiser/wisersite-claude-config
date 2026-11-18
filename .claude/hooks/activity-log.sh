@@ -18,21 +18,38 @@ if [[ "${CLAUDE_ACTIVITY_LOG:-on}" == "off" ]]; then
   exit 0
 fi
 
-# Everything below is best-effort. Trap any error path back to exit 0.
+# Defence in depth: any unexpected exit path (unbound variable under
+# set -u, a trap from the shell, a signal) still returns 0 so the
+# hook can never fail a Claude tool call. log_fail below is the
+# normal "write skipped" exit; this trap only catches the abnormal.
+trap 'exit 0' EXIT
+
+# Everything below is best-effort. log_fail prints one warning per
+# session (keyed by session_id from the hook input) so a broken
+# gcloud auth is not silent, but repeated calls do not spam stderr.
 log_fail() {
   local reason="$1"
-  local session_id="${2:-unknown}"
-  local sentinel="${SESSION_SENTINEL_DIR}/wiser-activity-log-warned-${session_id}"
-  if [[ ! -f "$sentinel" ]]; then
-    echo "wiser activity-log: write skipped ($reason). This warning fires once per session. See schemas/activity_log.md." >&2
-    : > "$sentinel" 2>/dev/null || true
+  local session_id="${2:-}"
+  if [[ -n "$session_id" ]]; then
+    local sentinel="${SESSION_SENTINEL_DIR}/wiser-activity-log-warned-${session_id}"
+    if [[ ! -f "$sentinel" ]]; then
+      echo "wiser activity-log: write skipped ($reason). This warning fires once per session. See schemas/activity_log.md." >&2
+      : > "$sentinel" 2>/dev/null || true
+    fi
+  else
+    # No session_id yet; cannot key a per-session sentinel without one.
+    # Warn on every invocation so the user notices; the tooling gap
+    # that lands us here (missing jq, etc) is normally fixed quickly.
+    echo "wiser activity-log: write skipped ($reason). See schemas/activity_log.md." >&2
   fi
   exit 0
 }
 
-# Tooling check. Missing jq / gcloud is not fatal.
-command -v jq >/dev/null 2>&1 || log_fail "jq not installed" "noinput"
-command -v gcloud >/dev/null 2>&1 || log_fail "gcloud not installed" "noinput"
+# jq is needed to read session_id from the hook input; without it we
+# cannot key the once-per-session sentinel, so warn without suppression.
+if ! command -v jq >/dev/null 2>&1; then
+  log_fail "jq not installed" ""
+fi
 
 # Read hook input.
 input="$(cat 2>/dev/null || true)"
@@ -49,6 +66,12 @@ session_id="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null ||
 tool_use_id="$(printf '%s' "$input" | jq -r '.tool_use_id // empty' 2>/dev/null || true)"
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
 raw_command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
+
+# gcloud check deferred to here so log_fail can key the once-per-session
+# warning sentinel by the real session_id from the hook input.
+if ! command -v gcloud >/dev/null 2>&1; then
+  log_fail "gcloud not installed" "$session_id"
+fi
 
 # Correlation id: tool_use_id is the authoritative shared id between a
 # PreToolUse entry and its matching PostToolUse / PostToolUseFailure
@@ -95,19 +118,21 @@ else
   fi
 fi
 
-# Actor: gh login if available, cached per session so switching accounts
+# Actor: gh login if available. Cached per session so switching accounts
 # in another session does not leak the old login here, and so shared
-# /tmp on multi-user systems does not cross-contaminate. Fall back to
-# $USER when gh is unavailable.
+# /tmp on multi-user systems does not cross-contaminate. When no
+# session_id is present the cache is skipped entirely (fetched fresh
+# each call) because a persistent nosession file would never invalidate
+# and a stale account would attach to every future call.
 if [[ -n "$session_id" ]]; then
   actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${session_id}"
+  if [[ ! -s "$actor_cache" ]]; then
+    ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
+  fi
+  actor="$(cat "$actor_cache" 2>/dev/null || true)"
 else
-  actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-nosession"
+  actor="$(gh api user -q .login 2>/dev/null || true)"
 fi
-if [[ ! -s "$actor_cache" ]]; then
-  ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
-fi
-actor="$(cat "$actor_cache" 2>/dev/null || true)"
 if [[ -z "$actor" ]]; then
   actor="${USER:-unknown}"
 fi
@@ -138,7 +163,7 @@ fi
 # tool_response. Normalise the inbound phase label.
 case "$PHASE" in
   pre)
-    status="ok"
+    status=""
     severity="INFO"
     phase_out="pre"
     ;;
@@ -153,7 +178,7 @@ case "$PHASE" in
     phase_out="post"
     ;;
   *)
-    status="ok"
+    status=""
     severity="INFO"
     phase_out="$PHASE"
     ;;
