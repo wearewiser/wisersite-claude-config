@@ -1,0 +1,33 @@
+{"name": "plain command passes through", "input": "ls -la /tmp", "expected": "ls -la /tmp"}
+{"name": "sk- prefix redacted with word boundary", "input": "curl -H 'X-Key: sk-proj1234567890abcdef1234567890'", "expected": "curl -H 'X-Key: sk-[redacted]'"}
+{"name": "sk- false-positive avoided for task-", "input": "kubectl get pods --selector task-worker", "expected": "kubectl get pods --selector task-worker"}
+{"name": "sk- false-positive avoided for disk-", "input": "gcloud compute disks list --filter disk-ssd", "expected": "gcloud compute disks list --filter disk-ssd"}
+{"name": "ghp_ prefix redacted", "input": "git push https://ghp_abcDEF12345678901234567890abcDEF12@github.com/x/y.git", "expected": "git push https://ghp_[redacted]@github.com/x/y.git"}
+{"name": "github_pat_ in TOKEN= env fully redacted (env rule wins)", "input": "export TOKEN=github_pat_11AAAAAAA0abcDEFghiJKLmnoPQRstuVWXyz012345", "expected": "export TOKEN=[redacted]"}
+{"name": "github_pat_ standalone redacted via prefix", "input": "echo The token is github_pat_11AAAAAAA0abcDEFghiJKL and nothing else", "expected": "echo The token is github_pat_[redacted] and nothing else"}
+{"name": "AKIA access key redacted", "input": "aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE", "expected": "aws configure set aws_access_key_id AKIA[redacted]"}
+{"name": "AIza in query param key= fully redacted (env rule wins over prefix)", "input": "curl 'https://maps.googleapis.com/x?key=AIzaSyBAbcDefGhiJklMnoPqrStu'", "expected": "curl 'https://maps.googleapis.com/x?key=[redacted]"}
+{"name": "AIza standalone redacted via prefix", "input": "echo The google key is AIzaSyBAbcDefGhiJklMnoPqrStu please rotate", "expected": "echo The google key is AIza[redacted] please rotate"}
+{"name": "ya29 OAuth token inside Authorization header fully redacted", "input": "curl -H 'Authorization: Bearer ya29.a0AfH6SMBabcdefghij'", "expected": "curl -H 'Authorization: [redacted]'"}
+{"name": "Bearer token inside Authorization header fully redacted (case insensitive)", "input": "curl -H 'authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'", "expected": "curl -H 'authorization: [redacted]'"}
+{"name": "JWT eyJ in token= env fully redacted (env rule wins)", "input": "echo 'token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef'", "expected": "echo 'token=[redacted]"}
+{"name": "URL credentials in postgres connection redacted", "input": "psql postgres://admin:supersecret@db.internal:5432/app", "expected": "psql postgres://[redacted]@db.internal:5432/app"}
+{"name": "URL credentials in https clone redacted", "input": "git clone https://john:mytoken@github.com/wearewiser/x.git", "expected": "git clone https://[redacted]@github.com/wearewiser/x.git"}
+{"name": "DATABASE_URL env redacted", "input": "DATABASE_URL=postgres://admin:supersecret@db:5432/app pnpm run migrate", "expected": "DATABASE_URL=[redacted] pnpm run migrate"}
+{"name": "GITHUB_TOKEN env redacted (keyword anywhere in name)", "input": "GITHUB_TOKEN=ghp_abcDEF12345678901234567890abcDEF12 gh auth login", "expected": "GITHUB_TOKEN=[redacted] gh auth login"}
+{"name": "AWS_SECRET_ACCESS_KEY env redacted (keyword anywhere)", "input": "AWS_SECRET_ACCESS_KEY=abc123xyz789 aws s3 ls", "expected": "AWS_SECRET_ACCESS_KEY=[redacted] aws s3 ls"}
+{"name": "Quoted env value redacted", "input": "API_KEY=\"abc 123 def\" ./script.sh", "expected": "API_KEY=\"[redacted]\" ./script.sh"}
+{"name": "Single-quoted env value redacted", "input": "SECRET='my s3cr3t v4lu3' ./script.sh", "expected": "SECRET='[redacted]' ./script.sh"}
+{"name": "--password flag with value redacted", "input": "mysql --user=root --password=hunter2 -e 'SELECT 1'", "expected": "mysql --user=root --password=[redacted] -e 'SELECT 1'"}
+{"name": "--token flag with space redacted", "input": "my-cli --token abc123xyz run", "expected": "my-cli --token [redacted] run"}
+{"name": "curl -u user:pass redacted", "input": "curl -u admin:hunter2 https://api.example.com/", "expected": "curl -u [redacted] https://api.example.com/"}
+{"name": "JSON api_key in -d body redacted", "input": "curl -X POST -d '{\"api_key\":\"abc123xyz\",\"ok\":true}' https://api/", "expected": "curl -X POST -d '{\"api_key\":\"[redacted]\",\"ok\":true}' https://api/"}
+{"name": "Authorization header in -H redacted", "input": "curl -H 'Authorization: token abc123xyz' https://api/", "expected": "curl -H 'Authorization: [redacted]' https://api/"}
+{"name": "X-API-Key header redacted", "input": "curl -H 'X-API-Key: abc123xyz' https://api/", "expected": "curl -H 'X-API-Key: [redacted]' https://api/"}
+{"name": "x-goog-api-key header redacted", "input": "curl --header 'x-goog-api-key: AIzaSyBabcDEF' https://api/", "expected": "curl --header 'x-goog-api-key: [redacted]' https://api/"}
+{"name": "Cookie header redacted", "input": "curl -H 'Cookie: session=abcXYZ123' https://api/", "expected": "curl -H 'Cookie: [redacted]' https://api/"}
+{"name": "Private-Token header redacted", "input": "curl -H 'Private-Token: glpat-abcdefghijk' https://gitlab/", "expected": "curl -H 'Private-Token: [redacted]' https://gitlab/"}
+{"name": "Private key block redacted (multi-line)", "input": "echo '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKC\ndeadbeef\n-----END RSA PRIVATE KEY-----'", "expected": "echo '[redacted-private-key]'"}
+{"name": "Heredoc body with KEY=value redacted (multi-line slurp)", "input": "cat > .env <<EOF\nDATABASE_URL=postgres://u:p@h/d\nAPI_KEY=abc123\nEOF", "expected": "cat > .env <<EOF\nDATABASE_URL=[redacted]\nAPI_KEY=[redacted]\nEOF"}
+{"name": "ordinary KEY=value without secret keyword passes through", "input": "LANG=en_GB.UTF-8 npm start", "expected": "LANG=en_GB.UTF-8 npm start"}
+{"name": "literal word 'token' as argument passes through", "input": "git log --grep 'auth token flow'", "expected": "git log --grep 'auth token flow'"}

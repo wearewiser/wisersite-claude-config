@@ -11,6 +11,7 @@
 set -u
 PHASE="${1:-pre}"
 SESSION_SENTINEL_DIR="${TMPDIR:-/tmp}"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Local off-switch.
 if [[ "${CLAUDE_ACTIVITY_LOG:-on}" == "off" ]]; then
@@ -78,55 +79,14 @@ fi
 
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# Redact the command string. Rules are declarative in
-# schemas/activity_log.md; this is the implementation. Multi-line (-0777
-# slurp) so heredocs are covered. Redaction runs BEFORE the length cap
-# so a token cut by truncation cannot slip through.
+# Redact the command string, then cap at 500 characters. The order is
+# load-bearing: redact first so a token cut by truncation cannot slip
+# through. Redaction rules live in lib/redact-command.sh and are pinned
+# in schemas/activity_log.md.
 command_redacted=""
 if [[ -n "$raw_command" ]]; then
-  command_redacted="$(printf '%s' "$raw_command" | perl -0777 -pe '
-    # Private-key blocks (multi-line).
-    s/-----BEGIN [A-Z ]+PRIVATE KEY-----.*?-----END [A-Z ]+PRIVATE KEY-----/[redacted-private-key]/gs;
+  command_redacted="$(printf '%s' "$raw_command" | "$HOOK_DIR/lib/redact-command.sh" 2>/dev/null || printf '%s' "$raw_command")"
 
-    # Known-prefix tokens. sk- requires word boundary + min length.
-    s/\bsk-[A-Za-z0-9_\-]{20,}/sk-[redacted]/g;
-    s/\bghp_[A-Za-z0-9_]+/ghp_[redacted]/g;
-    s/\bghs_[A-Za-z0-9_]+/ghs_[redacted]/g;
-    s/\bgho_[A-Za-z0-9_]+/gho_[redacted]/g;
-    s/\bgithub_pat_[A-Za-z0-9_]+/github_pat_[redacted]/g;
-    s/\bxox[bp]-[A-Za-z0-9\-]+/xox[redacted]/g;
-    s/\bAKIA[A-Z0-9]{16}/AKIA[redacted]/g;
-    s/\bAIza[A-Za-z0-9_\-]+/AIza[redacted]/g;
-    s/\bya29\.[A-Za-z0-9_\-]+/ya29.[redacted]/g;
-    s/\bGOCSPX-[A-Za-z0-9_\-]+/GOCSPX-[redacted]/g;
-    s/\beyJ[A-Za-z0-9_\-\.]{20,}/eyJ[redacted]/g;
-    s/\bBearer\s+[A-Za-z0-9_\-\.=]+/Bearer [redacted]/gi;
-
-    # URL credentials: scheme://user:pass@host.
-    s/([a-z][a-z0-9+.\-]*:\/\/)[^\s:@\/]+:[^\s@\/]+@/$1[redacted]@/gi;
-
-    # Headers: Authorization, X-API-Key, x-goog-api-key, Cookie, Private-Token.
-    # Covers -H, --header, and raw header forms.
-    s/((?:-H|--header)\s+["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^"\x27\n]+/$1$2$3[redacted]/gi;
-    s/\b(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\s"\x27,;]+/$1$2[redacted]/gi;
-
-    # curl -u user:pass form.
-    s/(-u\s+)[^\s]+/$1[redacted]/g;
-
-    # Flag forms: --password, --token, --secret, --api-key (with = or space).
-    s/(--(?:password|token|secret|api[\-_]?key|auth|credential)[=\s])["\x27]?[^\s"\x27]+["\x27]?/$1[redacted]/gi;
-
-    # JSON embedded in shell: "key":"value" where key contains a keyword.
-    s/("(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)"\s*:\s*)"[^"]+"/$1"[redacted]"/gi;
-
-    # KEY=value env assignments where KEY contains a keyword anywhere.
-    # Matches quoted and unquoted values, keyword anywhere in the name
-    # (so GITHUB_TOKEN, AWS_SECRET_ACCESS_KEY, DATABASE_URL match).
-    s/(\b[A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)[A-Za-z0-9_]*\s*=\s*)(["\x27])(?:(?!\2).)*\2/$1$2[redacted]$2/gi;
-    s/(\b[A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)[A-Za-z0-9_]*\s*=\s*)(?!["\x27])[^\s;&|]+/$1[redacted]/gi;
-  ' 2>/dev/null || printf '%s' "$raw_command")"
-
-  # Length cap: 500 chars post-redaction, truncate marker appended.
   if (( ${#command_redacted} > 500 )); then
     command_redacted="${command_redacted:0:487}...[truncated]"
   fi

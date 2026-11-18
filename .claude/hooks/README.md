@@ -35,6 +35,16 @@ Set `CLAUDE_ACTIVITY_LOG=off` in your shell to mute the hook on this machine. Us
 
 `setup.sh` warns at install time if `gcloud` or ADC is missing.
 
+### Testing the redaction rules
+
+Redaction regexes live in `lib/redact-command.sh` and are pinned by a vector suite at `tests/redaction-vectors.jsonl`. Each vector pairs an input command with its expected redacted output. Run:
+
+```bash
+./tests/run-redaction-tests.sh
+```
+
+Any rule change must land with an updated vector set and a reviewer sign-off from Lachlan Shaw-Stewart. To regenerate expected outputs after an approved rule change, use `./tests/run-redaction-tests.sh --generate` and paste the resulting JSONL back into the vectors file after eyeballing it.
+
 ### Troubleshooting
 
 - "wiser activity-log: write skipped" on stderr: the hook could not reach Cloud Logging. Check `gcloud auth list` and `gcloud config get-value project`; the project must be `wiser-mainframe`.
