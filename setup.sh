@@ -315,8 +315,18 @@ install_activity_log_hooks() {
     fi
   fi
 
-  local settings_tmp
-  settings_tmp="$(mktemp "${USER_SETTINGS}.XXXXXX")"
+  # Matches the symlink-branch pattern below: `|| true` keeps the
+  # assignment non-fatal under `set -e` (mktemp failures: disk full,
+  # bad $TMPDIR), empty-value check routes into the standard
+  # warn-and-return soft-fail path.
+  local settings_tmp=""
+  settings_tmp="$(mktemp "${USER_SETTINGS}.XXXXXX" 2>/dev/null)" || true
+  if [ -z "$settings_tmp" ]; then
+    echo "  Warning: could not create a tempfile next to $USER_SETTINGS."
+    echo "           Activity-log hooks not merged; rest of the agentic"
+    echo "           rig is unaffected."
+    return 0
+  fi
   if ! printf '%s' "$existing_content" | jq \
     --arg hooks_link "$HOOKS_LINK" '
     # Strip our activity-log entries at the single-hook granularity, not
