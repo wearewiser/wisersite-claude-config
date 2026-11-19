@@ -30,10 +30,11 @@ Audit-log destination named; sections 5.3 and 11 updated to point at the live Cl
 
 **Added:**
 - `schemas/activity_log.md` at the repo root: the pinned single source of truth for payload shape, closed `action` enum, severity mapping, and command-string redaction rules. Any current or future writer in any language cites it.
-- `.claude/hooks/activity-log.sh`: shared `PreToolUse` + `PostToolUse` hook that writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, under the invoking developer's gcloud ADC. Redacts secrets out of shell command strings before capping at 500 characters; exits 0 on every failure path so it never fails a user's tool call; emits a one-line stderr warning on the first write failure per session so broken auth is not silent.
-- `.claude/settings.json`: shared Claude Code settings file wiring the two hooks for every repo via the existing symlink distribution.
+- `.claude/hooks/activity-log.sh`: shared `PreToolUse` + `PostToolUse` + `PostToolUseFailure` hook that writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, under the invoking developer's active `gcloud auth` account (same store `gcloud logging write` reads from). Redacts secrets out of shell command strings before capping at 500 characters; backgrounds the gcloud write so the hook never blocks a tool call; catches every synchronous failure path and exits 0.
+- `.claude/hooks/lib/redact-command.sh`: perl redaction rules pinned by `.claude/hooks/tests/redaction-vectors.jsonl` and `run-redaction-tests.sh`. Each rule change is signed off by Lachlan Shaw-Stewart against the vector set.
+- `.claude/settings.example.json`: reference shape for the hook wiring. The real `~/.claude/settings.json` is written at install time by `setup.sh`, which merges the three hook entries into the user-level file so the hook fires in every Claude Code session on the machine, not only sessions started in a Wiser repo. User-level distribution is necessary because Claude Code does not walk the directory tree looking for `settings.json` the way it does for `CLAUDE.md`.
 - `.claude/hooks/README.md`: hook documentation covering behaviour, prerequisites, off-switch, and troubleshooting.
-- `setup.sh` pre-flight warning when `gcloud` is missing or ADC is not configured.
+- `setup.sh` pre-flight warning when `gcloud` is missing or no active gcloud account is configured.
 - `README.md` paragraph under "How it works" explaining the hook, its destination, and the `CLAUDE_ACTIVITY_LOG=off` off-switch.
 
 **Changed:**
