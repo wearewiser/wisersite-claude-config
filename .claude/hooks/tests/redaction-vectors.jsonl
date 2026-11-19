@@ -73,3 +73,6 @@
 {"name": "Shell-escaped JSON password in double-quoted -d arg redacted", "input": "curl -d \"{\\\"password\\\":\\\"TAIL\\\"}\" https://api.invalid", "expected": "curl -d \"{\\\"password\\\":\\\"[redacted]\\\"}\" https://api.invalid"}
 {"name": "mysql -u root bare username not touched by standalone -u rule (no colon)", "input": "mysql -u root -p'secret' db", "expected": "mysql -u root -p[redacted] db"}
 {"name": "docker -p port with space not matched by mysql -p rule", "input": "docker run -p 8080:80 nginx", "expected": "docker run -p 8080:80 nginx"}
+{"name": "Unquoted header with escaped whitespace continuation fully redacted", "input": "curl -H Cookie:\\ session=TAIL https://x", "expected": "curl -H Cookie:[redacted] https://x"}
+{"name": "Single-quoted header with adjacent unquoted fragment fully redacted (closing quote dropped)", "input": "curl -H 'Authorization: Basic 'TAIL https://x", "expected": "curl -H 'Authorization: [redacted] https://x"}
+{"name": "Double-quoted header with adjacent unquoted fragment fully redacted (closing quote dropped)", "input": "curl -H \"Authorization: Basic \"TAIL https://x", "expected": "curl -H \"Authorization: [redacted] https://x"}

@@ -43,21 +43,31 @@ perl -0777 -pe '
 
   # Headers: Authorization, X-API-Key, x-goog-api-key, Cookie, Private-Token.
   # Split by wrapper style so the value body terminates on the MATCHING
-  # wrapper only. A single-quoted wrapper whose value contains a
-  # double-quoted inner span (session="TAIL") used to leak the inner
-  # span because the shared body stopped at the first literal quote of
-  # either style; same for the mirror case. Separate rules per wrapper
-  # style keep each value body anchored to its own closing quote.
-  # Double-quoted wrapper: value stops at closing double quote; escape
-  # pairs inside are consumed as one unit so an inline \" does not
-  # terminate the match early.
-  s/((?:-H|--header)(?:=|\s*)")(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"])+/${1}${2}${3}[redacted]/gi;
-  # Single-quoted wrapper: value stops at closing single quote. Shell
-  # single quotes do not process escapes, so no escape-pair handling.
-  s/((?:-H|--header)(?:=|\s*)\x27)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\x27]+/${1}${2}${3}[redacted]/gi;
-  # Unquoted header arg (rare): the whole header is passed as one shell
-  # word with no outer wrapper. Stop at whitespace or either quote.
-  s/((?:-H|--header)(?:=|\s+))(?!["\x27])(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\s"\x27,;\n]+/${1}${2}${3}[redacted]/gi;
+  # wrapper only (a single-quoted wrapper carrying a double-quoted
+  # inner value used to leak and vice versa). For each wrapper there
+  # is an extended rule (closing wrapper followed by one-or-more
+  # adjacent shell fragments; handles the -H wrapper+concat leak case)
+  # and a standard rule (closing wrapper followed by shell separator
+  # or end-of-string; preserves the closing quote in the output).
+  # Extended rules run BEFORE standard rules so the standard rule only
+  # matches when there is no trailing fragment to consume.
+  # Extended double-quoted.
+  s/((?:-H|--header)(?:=|\s*))"(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"])+"(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}"${2}${3}[redacted]/gi;
+  # Extended single-quoted.
+  s/((?:-H|--header)(?:=|\s*))\x27(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\x27]+\x27(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}\x27${2}${3}[redacted]/gi;
+  # Standard double-quoted wrapper. Require a closing " in the match
+  # so this rule does NOT try to redact a half-open wrapper left
+  # behind by the extended rule above (no closing " to anchor on,
+  # the body would run to end of input and eat the rest of the
+  # command). Closing " is restored in the replacement.
+  s/((?:-H|--header)(?:=|\s*)")(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"])+"/${1}${2}${3}[redacted]"/gi;
+  # Standard single-quoted wrapper. Same closing-quote anchor.
+  s/((?:-H|--header)(?:=|\s*)\x27)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\x27]+\x27/${1}${2}${3}[redacted]\x27/gi;
+  # Unquoted header arg: the whole header is passed as one shell word
+  # with no outer wrapper. Shell-token value matcher consumes adjacent
+  # fragments and escape-whitespace (-H Cookie:\ session=TAIL) rather
+  # than stopping at the first literal space.
+  s/((?:-H|--header)(?:=|\s+))(?!["\x27])(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}${2}${3}[redacted]/gi;
   # Bare header anywhere in the command (not inside -H/--header). The
   # bare rule consumes an optional scheme word (Bearer, Basic, token,
   # etc) before the value so a token containing `/` or `+` is still
