@@ -18,6 +18,19 @@ if [[ "${CLAUDE_ACTIVITY_LOG:-on}" == "off" ]]; then
   exit 0
 fi
 
+# Wiser-scope boundary. The hook installs user-globally into
+# ~/.claude/settings.json so it fires in every Claude Code session on
+# the machine, not only sessions started in a Wiser repo. Branch-name
+# extraction alone (WP23-NNN) is not enough to decide scope, because
+# an unrelated project could coincidentally use the same ticket-naming
+# convention and leak its commands and file paths into Wiser's log.
+# Enforce the folder boundary explicitly: if cwd is not under
+# ~/Projects/Wiser/, exit 0 silently without reading any input.
+case "$PWD/" in
+  "$HOME/Projects/Wiser/"*) ;;
+  *) exit 0 ;;
+esac
+
 # Defence in depth: any unexpected exit path (unbound variable under
 # set -u, a trap from the shell, a signal) still returns 0 so the
 # hook can never fail a Claude tool call. log_fail below is the

@@ -137,11 +137,18 @@ fi
 
 if ! printf '%s' "$EXISTING_SETTINGS_CONTENT" | jq \
   --arg hooks_link "$HOOKS_LINK" '
+  # Strip our activity-log entries at the single-hook granularity, not
+  # the whole matcher group. If a dev added an unrelated hook (security
+  # check, auditor, etc) into the same matcher group alongside ours, we
+  # want to remove only our command from that group without wiping
+  # theirs. Groups that end up with no surviving commands are dropped.
   def strip_ours(key):
     (.hooks[key] // []) as $arr
-    | .hooks[key] = ($arr | map(
-        select([.hooks[]?.command // "" | contains($hooks_link + "/activity-log.sh")] | any | not)
-      ));
+    | .hooks[key] = (
+        $arr
+        | map(.hooks |= map(select((.command // "") | contains($hooks_link + "/activity-log.sh") | not)))
+        | map(select((.hooks // []) | length > 0))
+      );
   def add_ours(key; phase):
     .hooks[key] += [{
       matcher: ".*",
@@ -169,7 +176,16 @@ if [ ! -s "$SETTINGS_TMP" ]; then
   exit 1
 fi
 
-mv "$SETTINGS_TMP" "$USER_SETTINGS"
+# Preserve a dotfiles-managed symlink. If $USER_SETTINGS is a symlink
+# (chezmoi, stow, yadm, home-manager etc), `mv` would replace the link
+# with a regular file and future dotfiles updates would stop reaching
+# Claude Code. Write back through the link via `cat` so the target file
+# gets updated in place.
+if [ -L "$USER_SETTINGS" ]; then
+  cat "$SETTINGS_TMP" > "$USER_SETTINGS" && rm -f "$SETTINGS_TMP"
+else
+  mv "$SETTINGS_TMP" "$USER_SETTINGS"
+fi
 echo "Claude activity-log hooks merged into: $USER_SETTINGS"
 
 # Create project-knowledge symlink (file-level, not folder). Unlike the four
