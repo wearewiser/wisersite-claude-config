@@ -91,103 +91,6 @@ fi
 ln -s "$REPO_DIR/.claude/hooks" "$HOOKS_LINK"
 echo "Symlink created: $HOOKS_LINK -> $REPO_DIR/.claude/hooks"
 
-# User-level Claude Code settings.json. The hook needs to fire in
-# sessions started from any Wiser repo, not only sessions started from
-# this repo. Claude Code does not walk parent directories looking for
-# settings.json (unlike the CLAUDE.md discovery), so a settings file
-# at ~/Projects/Wiser/.claude/settings.json would only be found when a
-# session is started in a cwd that has no closer settings.json and no
-# project root. The only location Claude Code looks at from every
-# session on this machine is ~/.claude/settings.json.
-#
-# The hook is fine firing user-globally: its first step is to extract
-# WP23-NNN from the current git branch and exit 0 silently if it does
-# not match, so a session in a non-Wiser repo pays nothing but a jq
-# invocation and a `git rev-parse` call per tool use.
-#
-# Merge semantics via jq so a developer's existing theme / permissions
-# / unrelated hooks are preserved. On re-run, any previously-installed
-# activity-log.sh entry (identified by the HOOKS_LINK path inside the
-# command string) is stripped before our fresh entries are appended,
-# so the file stays idempotent across repeated setups. No _managed_by
-# marker is needed because the hook commands themselves are the
-# identifier.
-if ! command -v jq >/dev/null 2>&1; then
-  echo "Error: jq is required to update $USER_SETTINGS safely."
-  echo "       Install jq (brew install jq / apt install jq) and re-run."
-  exit 1
-fi
-
-mkdir -p "$(dirname "$USER_SETTINGS")"
-
-if [ -f "$USER_SETTINGS" ]; then
-  EXISTING_SETTINGS_SOURCE="$USER_SETTINGS"
-else
-  EXISTING_SETTINGS_SOURCE=/dev/null
-fi
-
-SETTINGS_TMP="$(mktemp "${USER_SETTINGS}.XXXXXX")"
-# If the existing file is empty (no prior settings.json at all), seed
-# with an empty object so jq has valid input. Otherwise read as-is.
-if [ "$EXISTING_SETTINGS_SOURCE" = /dev/null ]; then
-  EXISTING_SETTINGS_CONTENT='{}'
-else
-  EXISTING_SETTINGS_CONTENT="$(cat "$EXISTING_SETTINGS_SOURCE")"
-fi
-
-if ! printf '%s' "$EXISTING_SETTINGS_CONTENT" | jq \
-  --arg hooks_link "$HOOKS_LINK" '
-  # Strip our activity-log entries at the single-hook granularity, not
-  # the whole matcher group. If a dev added an unrelated hook (security
-  # check, auditor, etc) into the same matcher group alongside ours, we
-  # want to remove only our command from that group without wiping
-  # theirs. Groups that end up with no surviving commands are dropped.
-  def strip_ours(key):
-    (.hooks[key] // []) as $arr
-    | .hooks[key] = (
-        $arr
-        | map(.hooks |= map(select((.command // "") | contains($hooks_link + "/activity-log.sh") | not)))
-        | map(select((.hooks // []) | length > 0))
-      );
-  def add_ours(key; phase):
-    .hooks[key] += [{
-      matcher: ".*",
-      hooks: [{ type: "command", command: ($hooks_link + "/activity-log.sh " + phase) }]
-    }];
-  .hooks //= {}
-  | strip_ours("PreToolUse")
-  | strip_ours("PostToolUse")
-  | strip_ours("PostToolUseFailure")
-  | add_ours("PreToolUse"; "pre")
-  | add_ours("PostToolUse"; "post")
-  | add_ours("PostToolUseFailure"; "post-failure")
-' > "$SETTINGS_TMP"; then
-  rm -f "$SETTINGS_TMP"
-  echo "Error: jq failed to merge the Claude activity-log hooks into"
-  echo "       $USER_SETTINGS. Inspect that file and your jq install,"
-  echo "       then re-run setup.sh."
-  exit 1
-fi
-
-if [ ! -s "$SETTINGS_TMP" ]; then
-  rm -f "$SETTINGS_TMP"
-  echo "Error: jq produced empty output. Refusing to overwrite"
-  echo "       $USER_SETTINGS."
-  exit 1
-fi
-
-# Preserve a dotfiles-managed symlink. If $USER_SETTINGS is a symlink
-# (chezmoi, stow, yadm, home-manager etc), `mv` would replace the link
-# with a regular file and future dotfiles updates would stop reaching
-# Claude Code. Write back through the link via `cat` so the target file
-# gets updated in place.
-if [ -L "$USER_SETTINGS" ]; then
-  cat "$SETTINGS_TMP" > "$USER_SETTINGS" && rm -f "$SETTINGS_TMP"
-else
-  mv "$SETTINGS_TMP" "$USER_SETTINGS"
-fi
-echo "Claude activity-log hooks merged into: $USER_SETTINGS"
-
 # Create project-knowledge symlink (file-level, not folder). Unlike the four
 # folder symlinks above, PROJECT_KNOWLEDGE.md is a single file at the repo
 # root, so the symlink points at the file directly. Handle existing symlink
@@ -374,6 +277,99 @@ else
   exit 1
 fi
 
+echo ""
+
+# ---------------------------------------------------------------------------
+# Claude activity-log hooks: merge into user-level ~/.claude/settings.json.
+# Soft-fails so an optional observability hook never blocks a fresh setup;
+# the critical install steps (symlinks, CLAUDE.md imports, zshrc wrapper)
+# have already run above. On a missing jq or a malformed existing
+# settings.json, print a warning and continue. The hook is a best-effort
+# audit tool, not a hard requirement for the rest of the agentic rig.
+# ---------------------------------------------------------------------------
+install_activity_log_hooks() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  Warning: jq is not on PATH. Activity-log hooks not merged into"
+    echo "           $USER_SETTINGS. Install jq (brew install jq) and re-run"
+    echo "           setup.sh when convenient; the rest of the agentic rig"
+    echo "           is unaffected."
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$USER_SETTINGS")"
+
+  local existing_content='{}'
+  if [ -f "$USER_SETTINGS" ]; then
+    existing_content="$(cat "$USER_SETTINGS")"
+    if ! printf '%s' "$existing_content" | jq empty 2>/dev/null; then
+      echo "  Warning: $USER_SETTINGS exists but is not valid JSON."
+      echo "           Activity-log hooks not merged. Fix the file by hand"
+      echo "           (or move it aside) and re-run setup.sh. The rest of"
+      echo "           the agentic rig is unaffected."
+      return 0
+    fi
+  fi
+
+  local settings_tmp
+  settings_tmp="$(mktemp "${USER_SETTINGS}.XXXXXX")"
+  if ! printf '%s' "$existing_content" | jq \
+    --arg hooks_link "$HOOKS_LINK" '
+    # Strip our activity-log entries at the single-hook granularity, not
+    # the whole matcher group. If a dev added an unrelated hook (security
+    # check, auditor, etc) into the same matcher group alongside ours, we
+    # want to remove only our command from that group without wiping
+    # theirs. Groups that end up with no surviving commands are dropped.
+    def strip_ours(key):
+      (.hooks[key] // []) as $arr
+      | .hooks[key] = (
+          $arr
+          | map(.hooks |= map(select((.command // "") | contains($hooks_link + "/activity-log.sh") | not)))
+          | map(select((.hooks // []) | length > 0))
+        );
+    def add_ours(key; phase):
+      .hooks[key] += [{
+        matcher: ".*",
+        hooks: [{ type: "command", command: ($hooks_link + "/activity-log.sh " + phase) }]
+      }];
+    .hooks //= {}
+    | strip_ours("PreToolUse")
+    | strip_ours("PostToolUse")
+    | strip_ours("PostToolUseFailure")
+    | add_ours("PreToolUse"; "pre")
+    | add_ours("PostToolUse"; "post")
+    | add_ours("PostToolUseFailure"; "post-failure")
+  ' > "$settings_tmp"; then
+    rm -f "$settings_tmp"
+    echo "  Warning: jq failed to merge the Claude activity-log hooks into"
+    echo "           $USER_SETTINGS. Inspect your jq install and re-run setup"
+    echo "           when convenient. The rest of the agentic rig is"
+    echo "           unaffected."
+    return 0
+  fi
+
+  if [ ! -s "$settings_tmp" ]; then
+    rm -f "$settings_tmp"
+    echo "  Warning: jq produced empty output. Refusing to overwrite"
+    echo "           $USER_SETTINGS. The rest of the agentic rig is"
+    echo "           unaffected."
+    return 0
+  fi
+
+  # Preserve a dotfiles-managed symlink. If $USER_SETTINGS is a symlink
+  # (chezmoi, stow, yadm, home-manager etc), `mv` would replace the link
+  # with a regular file and future dotfiles updates would stop reaching
+  # Claude Code. Write back through the link via `cat` so the target
+  # file gets updated in place.
+  if [ -L "$USER_SETTINGS" ]; then
+    cat "$settings_tmp" > "$USER_SETTINGS" && rm -f "$settings_tmp"
+  else
+    mv "$settings_tmp" "$USER_SETTINGS"
+  fi
+  echo "  Activity-log hooks merged into: $USER_SETTINGS"
+}
+
+echo "Installing Claude activity-log hooks..."
+install_activity_log_hooks
 echo ""
 
 # Pre-flight check for the Claude activity-log hook (schemas/activity_log.md).
