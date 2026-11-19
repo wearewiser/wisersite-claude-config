@@ -8,13 +8,14 @@ Shared Claude Code configuration for all Wiser repos. Single source of truth for
 wisersite-claude-config/
 ├── agents/                          # shared Claude agents loaded by all repos
 │   ├── branch-guardian.md
-│   ├── codebase-reviewer.md
 │   ├── design-fidelity-reviewer.md
 │   ├── dod-guardian.md
 │   ├── dor-guardian.md
 │   ├── pr-reviewer.md
 │   ├── secrets-guardian.md
-│   └── ticket-planner.md
+│   ├── ticket-planner.md
+│   └── local-only/                  # human-invoked agents, never copied to CI
+│       └── codebase-reviewer.md
 ├── .claude/skills/                  # user-invoked skills shared across repos
 │   └── user-story-writer/
 │       ├── SKILL.md
@@ -55,9 +56,9 @@ Repos that want Claude to consult the shared ADRs should point at them from thei
 
 ### CI
 
-Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies `agents/` into `.claude/agents/` and `docs/ADR/` into `.claude/adr/` before Claude runs. Skills are not copied to CI; they are user-invoked (via slash command or natural-language request), not something CI needs. The files exist only for the duration of that job; nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
+Each repo has a thin `claude.yml` that calls the reusable workflow in this repo (`claude-reusable.yml@main`). When a PR is opened, GitHub spins up a fresh container, the reusable workflow clones `wisersite-claude-config` and copies the top-level files of `agents/` into `.claude/agents/` and `docs/ADR/` into `.claude/adr/` before Claude runs. Skills are not copied to CI; they are user-invoked (via slash command or natural-language request), not something CI needs. The files exist only for the duration of that job; nothing is committed to individual repos. Any change made here is picked up by every repo on their next CI run.
 
-Note: `codebase-reviewer` is copied along with the rest of `agents/` but is local-only. It is long-running and interactive (it can raise Jira tickets), so it is not supported in CI and stops itself if it detects a CI run.
+Agents in `agents/local-only/` (currently `codebase-reviewer`) are deliberately not copied to CI. They are long-running and interactive (they can raise Jira tickets). Locally they are still discovered, because Claude Code scans `agents/` recursively.
 
 ---
 
