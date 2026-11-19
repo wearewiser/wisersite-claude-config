@@ -46,8 +46,12 @@ perl -0777 -pe '
   # the value is attached to a quote), and raw header forms anywhere in
   # the command. The bare rule consumes an optional scheme word (Bearer,
   # Basic, token, etc) before the value so a token containing `/` or `+`
-  # is still captured in full after the scheme is matched.
-  s/((?:-H|--header)\s*=?\s*["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^"\x27\n]+/${1}${2}${3}[redacted]/gi;
+  # is still captured in full after the scheme is matched. Value body
+  # accepts `\.` escape pairs so a header like `Cookie: session=\"TAIL\"`
+  # (escaped quotes inside the shell-level quoted argument) consumes the
+  # escaped quote as a unit rather than stopping at it and leaving the
+  # suffix in the uploaded command.
+  s/((?:-H|--header)\s*=?\s*["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"\x27\n])+/${1}${2}${3}[redacted]/gi;
   s/\b(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:[A-Za-z]+\s+)?[^\s"\x27,;]+/${1}${2}[redacted]/gi;
 
   # Bearer token form. Runs after the header rule so headers that
@@ -57,27 +61,34 @@ perl -0777 -pe '
   # containing / or + or ~ are captured in full.
   s/\bBearer\s+\S+/Bearer [redacted]/gi;
 
-  # curl -u user:pass form. Handles quoted argument too, so a password
-  # containing whitespace does not leak its suffix after the first space.
-  # Scoped to curl / wget contexts so a general -u flag (mysql username,
-  # ssh user, etc) in other commands is not touched.
-  s/(\b(?:curl|wget)\b[^\n]*?\s-u\s+)(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s]+)/${1}[redacted]/g;
+  # Shell-token value matcher used by every flag/assignment rule below.
+  # Consumes one or more adjacent fragments where each fragment is a
+  # double-quoted string (treating backslash-anything as one unit so
+  # escaped quotes inside do not end the fragment), a single-quoted
+  # string (no escape processing, like real shell), an escaped
+  # character outside quotes (so KEY=foo\ bar consumes the whole shell
+  # word), or a plain non-separator char. Catches adjacent-fragment
+  # assignments, escaped-whitespace values, and attached -p forms all
+  # in one expression.
+
+  # curl / wget credentials. Short `-u` supports the attached form
+  # `-uuser:pass` (curl convention), so the separator after `-u` is
+  # `=`, whitespace, or empty. Long `--user` requires `=` or whitespace
+  # so an unrelated flag like `--useragent` (hypothetical) will not
+  # swallow its tail.
+  s/(\b(?:curl|wget)\b[^\n]*?\s(?:-u(?:=|\s*)|--user(?:=|\s+)))(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}[redacted]/g;
 
   # Flag forms: --password, --token, --secret, --api-key, --auth, --credential.
   # Separator accepts = or one-or-more whitespace characters, so repeated
-  # spaces between flag and value do not bypass. Quoted body handles
-  # backslash-escaped quotes in both styles so a value like first then
-  # backslash-quote tail is consumed in full; the unquoted branch is only
-  # tried when no quote follows the separator.
-  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)(?:=|\s+))(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s"\x27]+)/${1}[redacted]/gi;
+  # spaces between flag and value do not bypass.
+  s/(--(?:password|token|secret|api[\-_]?key|auth|credential)(?:=|\s+))(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}[redacted]/gi;
 
   # MySQL attached short-form password: -pPASSWORD (never -p<space>PASSWORD,
   # which mysql treats as a prompt). Scoped to mysql / mysqldump contexts
   # so a general -p flag (port, path) in other commands is not touched.
-  # Quoted-body alternative handles -p"my pass" without leaking the tail
-  # after the first space; the unquoted branch stops at command
-  # separators so `-psecret; ls` keeps its `;`.
-  s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s;&|]+)/${1}-p[redacted]/gi;
+  # Unquoted branch stops at command separators so `-psecret; ls` keeps
+  # its `;`.
+  s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}-p[redacted]/gi;
 
   # JSON embedded in shell: "key":"value" where key contains a keyword.
   # Value body accepts backslash-escaped characters so an escaped quote
@@ -87,10 +98,19 @@ perl -0777 -pe '
   # KEY=value env assignments where the name contains a keyword anywhere,
   # or IS the keyword itself. \w* zero-or-more on either side matches
   # bare TOKEN / SECRET / KEY as well as GITHUB_TOKEN / AWS_SECRET_ACCESS_KEY.
-  # Quoted (any quote style) first, then unquoted. Quoted body uses
-  # [\s\S] rather than . so multi-line values across heredocs do not
-  # slip through; backslash-escaped characters are consumed whole so an
-  # escaped quote inside the value does not terminate the match.
-  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:\\.|(?!\2)[\s\S])*\2/${1}${2}[redacted]${2}/gi;
-  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27])[^\s;&|"\x27]+/${1}[redacted]/gi;
+  #
+  # Rule A (quote-preserving): value is a single quoted span terminated
+  # by whitespace / shell separator / end-of-string. Preserves the
+  # surrounding quote char so logs stay readable (KEY="[redacted]").
+  # The lookahead stops Rule A from firing when the quoted span is
+  # concatenated with an adjacent fragment of a different quote style;
+  # in that case control falls to Rule B which eats the whole value.
+  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(["\x27])(?:\\.|(?!\2)[\s\S])*\2(?=[\s;&|]|$)/${1}${2}[redacted]${2}/gi;
+  #
+  # Rule B (all other shapes): bare values, escaped whitespace
+  # (KEY=foo\ bar), adjacent quoted fragments of mixed styles, and
+  # mixed quoted/unquoted concat (KEY="first"second). Negative
+  # lookahead skips a value Rule A has already redacted so the quote
+  # chars Rule A preserved are not stripped on the second pass.
+  s/(\b\w*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL|API_KEY|DATABASE_URL)\w*\s*=\s*)(?!["\x27]?\[redacted\]["\x27]?)(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}[redacted]/gi;
 '

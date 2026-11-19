@@ -61,3 +61,9 @@
 {"name": "npm auth token redacted standalone", "input": "npm config set //registry.npmjs.org/:_authToken npm_abcdefghij", "expected": "npm config set //registry.npmjs.org/:_authToken npm_[redacted]"}
 {"name": "Stripe sk_live_ secret key redacted", "input": "stripe --key sk_live_abcdefghijklmnopqrst listen", "expected": "stripe --key [redacted] listen"}
 {"name": "Stripe rk_test_ restricted test key redacted", "input": "echo rk_test_abc123def456 rotate", "expected": "echo [redacted] rotate"}
+{"name": "curl -u attached form (no space) redacted", "input": "curl -uadmin:hunter2 https://api.example.com/", "expected": "curl -u[redacted] https://api.example.com/"}
+{"name": "curl --user long-form with space redacted", "input": "curl --user admin:hunter2 https://api.example.com/", "expected": "curl --user [redacted] https://api.example.com/"}
+{"name": "curl --user long-form with equals redacted", "input": "curl --user=admin:hunter2 https://api.example.com/", "expected": "curl --user=[redacted] https://api.example.com/"}
+{"name": "Header value with escaped quote inside consumes through the escape", "input": "curl -H \"Cookie: session=\\\"TAIL\\\"\" https://api.example.com/", "expected": "curl -H \"Cookie: [redacted]\" https://api.example.com/"}
+{"name": "KEY=value with escaped whitespace continuation fully redacted", "input": "export SECRET=first\\ TAIL", "expected": "export SECRET=[redacted]"}
+{"name": "KEY=value with adjacent quoted fragments fully redacted (no quote preservation)", "input": "SECRET=\"first\"'TAIL' ./run.sh", "expected": "SECRET=[redacted] ./run.sh"}
