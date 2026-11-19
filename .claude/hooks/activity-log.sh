@@ -202,12 +202,18 @@ if [[ -n "$session_id" ]]; then
     # developer laptops those usually match anyway.
     rm -f "$actor_cache" 2>/dev/null || true
     ( umask 077 && printf '%s' "${USER:-unknown}" > "$actor_cache" ) 2>/dev/null || true
+    # Redirect stdout/stderr inside the subshell BEFORE backgrounding
+    # so the background does not inherit the hook's pipes. `disown`
+    # alone unlinks the job from the shell's job table but does NOT
+    # close the inherited file descriptors; without the redirect,
+    # anything the background wrote could keep the hook's stdout /
+    # stderr open until the background finished.
     (
       gh_login="$(gh api user -q .login 2>/dev/null || true)"
       if [[ -n "$gh_login" ]]; then
         ( umask 077 && printf '%s' "$gh_login" > "$actor_cache" ) 2>/dev/null || true
       fi
-    ) &
+    ) >/dev/null 2>&1 &
     disown $! 2>/dev/null || true
   fi
   if [[ -O "$actor_cache" ]]; then
@@ -332,6 +338,9 @@ fi
     --project=wiser-mainframe \
     --quiet >/dev/null 2>&1
 ) &
-disown $!
+# `2>/dev/null || true` so a race between `&` and `disown` (gcloud
+# exits fast enough that its PID is already off the job table) does
+# not print "no such job" to stderr. Matches the gh background above.
+disown $! 2>/dev/null || true
 
 exit 0
