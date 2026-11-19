@@ -366,15 +366,22 @@ install_activity_log_hooks() {
   # until a manual fix.
   if [ -L "$USER_SETTINGS" ]; then
     local link_target
+    local real_target
+    local real_dir
+    local real_tmp=""
     link_target="$(readlink "$USER_SETTINGS")"
     case "$link_target" in
       /*) real_target="$link_target" ;;
       *)  real_target="$(dirname "$USER_SETTINGS")/$link_target" ;;
     esac
-    local real_dir
     real_dir="$(dirname "$real_target")"
-    local real_tmp
-    real_tmp="$(mktemp "${real_dir}/settings.json.XXXXXX" 2>/dev/null)"
+    # setup.sh runs under `set -e`. A bare `real_tmp="$(mktemp ...)"`
+    # would terminate the whole script if mktemp failed (read-only
+    # target directory, out of inodes), bypassing the warn-and-continue
+    # path intended by install_activity_log_hooks(). `|| true` keeps
+    # the assignment non-fatal; the following empty-value check then
+    # handles it with the standard soft-fail warning.
+    real_tmp="$(mktemp "${real_dir}/settings.json.XXXXXX" 2>/dev/null)" || true
     if [ -z "$real_tmp" ]; then
       rm -f "$settings_tmp"
       echo "  Warning: could not create a tempfile next to the symlink"
