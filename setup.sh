@@ -395,7 +395,18 @@ install_activity_log_hooks() {
       echo "           merged; rest of the agentic rig is unaffected."
       return 0
     fi
-    mv "$real_tmp" "$real_target"
+    # Final mv wrapped in the same soft-fail shape as every other step
+    # above. Under setup.sh's `set -e`, a bare mv would terminate the
+    # entire script on failure (target FS full, permissions removed
+    # mid-run) and leak both tempfiles. Explicit guard: clean up and
+    # return 0 so the "Setup complete" message still prints.
+    if ! mv "$real_tmp" "$real_target"; then
+      rm -f "$real_tmp" "$settings_tmp"
+      echo "  Warning: failed to mv $real_tmp onto $real_target."
+      echo "           Activity-log hooks not merged; rest of the agentic"
+      echo "           rig is unaffected."
+      return 0
+    fi
     rm -f "$settings_tmp"
   else
     mv "$settings_tmp" "$USER_SETTINGS"
