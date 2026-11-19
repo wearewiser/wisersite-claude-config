@@ -32,6 +32,19 @@ if [[ ! -f "$VECTORS" ]]; then
   exit 2
 fi
 
+# Fail fast if jq is missing. Without jq the per-vector `name`, `input`,
+# and `expected` extractions silently produce empty strings, the lib is
+# fed empty input, actual == expected (both empty), and every vector
+# counts as passing. The suite would exit 0 while testing nothing - a
+# false green that would let a real redaction regression ship. Lachie
+# signs off on each rule change against this suite, so false passes are
+# load-bearing to skip.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: jq is required to parse the vectors file." >&2
+  echo "       install jq (brew install jq / apt install jq) and re-run." >&2
+  exit 2
+fi
+
 PASS=0
 FAIL=0
 FAILURES=""
