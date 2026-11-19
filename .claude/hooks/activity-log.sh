@@ -142,11 +142,26 @@ if [[ "$PHASE" == "pre" ]]; then
     exit 0
   fi
   if [[ -n "$ticket_cache" ]]; then
+    # Destroy any pre-existing file at this path before writing. On a
+    # shared /tmp a local attacker could pre-create the cache (umask
+    # 077 only affects files we create, not files we truncate), then
+    # rewrite its contents between our write and the post-phase read
+    # to inject a crafted ticket_id into the audit log. `rm -f` plus
+    # umask 077 guarantees the file we read back is one we authored.
+    rm -f "$ticket_cache" 2>/dev/null || true
     ( umask 077 && printf '%s' "$ticket_id" > "$ticket_cache" ) 2>/dev/null || true
   fi
 else
-  if [[ -n "$ticket_cache" && -s "$ticket_cache" ]]; then
+  # `-O` test rejects a cache file we do not own. Pairs with the
+  # rm-before-write above: if an attacker raced in between the pre and
+  # post phases, the file would no longer be owned by this user and
+  # the read falls back to the live branch name.
+  if [[ -n "$ticket_cache" && -s "$ticket_cache" && -O "$ticket_cache" ]]; then
     ticket_id="$(cat "$ticket_cache" 2>/dev/null || true)"
+    rm -f "$ticket_cache" 2>/dev/null || true
+  elif [[ -n "$ticket_cache" ]]; then
+    # Attacker-created or not-owned-by-us: delete it so the next pre
+    # starts from a clean slate, then fall back to the branch name.
     rm -f "$ticket_cache" 2>/dev/null || true
   fi
   if [[ -z "$ticket_id" ]]; then
@@ -165,7 +180,13 @@ fi
 # and a stale account would attach to every future call.
 if [[ -n "$session_id" ]]; then
   actor_cache="${SESSION_SENTINEL_DIR}/wiser-gh-login-${safe_session_id}"
-  if [[ ! -s "$actor_cache" ]]; then
+  # Same TOCTOU defence as the ticket cache above: refuse to read a
+  # file not owned by this user (would let a local attacker on shared
+  # /tmp inject a crafted actor into the audit log), and `rm -f`
+  # before writing so our umask-077 create cannot be aliased to an
+  # attacker-controlled file.
+  if [[ ! -s "$actor_cache" || ! -O "$actor_cache" ]]; then
+    rm -f "$actor_cache" 2>/dev/null || true
     ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
     # If gh failed (not installed, not authenticated, network down) the
     # redirect still left an empty file. Fill it with the $USER fallback
@@ -175,7 +196,11 @@ if [[ -n "$session_id" ]]; then
       ( umask 077 && printf '%s' "${USER:-unknown}" > "$actor_cache" ) || true
     fi
   fi
-  actor="$(cat "$actor_cache" 2>/dev/null || true)"
+  if [[ -O "$actor_cache" ]]; then
+    actor="$(cat "$actor_cache" 2>/dev/null || true)"
+  else
+    actor=""
+  fi
 else
   actor="$(gh api user -q .login 2>/dev/null || true)"
 fi
