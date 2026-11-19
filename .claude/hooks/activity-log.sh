@@ -229,7 +229,10 @@ if [[ -n "$raw_command" ]]; then
   fi
 
   if (( ${#command_redacted} > 500 )); then
-    command_redacted="${command_redacted:0:487}...[truncated]"
+    # ...[truncated] is 14 chars; 486 + 14 = 500 keeps the final
+    # string inside the schema's 500-char cap. A naive 487 produced
+    # 501.
+    command_redacted="${command_redacted:0:486}...[truncated]"
   fi
 fi
 
