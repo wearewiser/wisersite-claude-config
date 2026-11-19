@@ -118,6 +118,19 @@ perl -0777 -pe '
   # its `;`.
   s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}-p[redacted]/gi;
 
+  # Standalone attached -p<value> form, used to catch repeated mysql
+  # -p options that the scoped rule above cannot reach (its
+  # mysql|mysqldump anchor is consumed on the first /g iteration, so
+  # a second -p in the same command stays untouched). The required
+  # letter in the value discriminates from numeric port values:
+  # `docker -p8080`, `ssh -p22`, and `-p8080:80` are all pure-digit
+  # (plus `:`), so the lookahead fails and they are left alone. The
+  # trade-off is a purely-numeric mysql password (very rare) and a
+  # hostname-port form like `docker -pwww:80` (also rare) over-match;
+  # over-redaction of a non-secret is accepted for a redacted audit
+  # log, under-redaction of a secret is not.
+  s/(\s-p)(?=(?:"[^"]*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\])*[A-Za-z])(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\]+)/${1}[redacted]/g;
+
   # JSON embedded in shell: "key":"value" where key contains a keyword.
   # Value body accepts backslash-escaped characters so an escaped quote
   # (\") inside the string does not end the match prematurely.

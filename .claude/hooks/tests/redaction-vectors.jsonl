@@ -76,3 +76,5 @@
 {"name": "Unquoted header with escaped whitespace continuation fully redacted", "input": "curl -H Cookie:\\ session=TAIL https://x", "expected": "curl -H Cookie:[redacted] https://x"}
 {"name": "Single-quoted header with adjacent unquoted fragment fully redacted (closing quote dropped)", "input": "curl -H 'Authorization: Basic 'TAIL https://x", "expected": "curl -H 'Authorization: [redacted] https://x"}
 {"name": "Double-quoted header with adjacent unquoted fragment fully redacted (closing quote dropped)", "input": "curl -H \"Authorization: Basic \"TAIL https://x", "expected": "curl -H \"Authorization: [redacted] https://x"}
+{"name": "Repeated mysql -p options both redacted (standalone letters-required rule)", "input": "mysql -pfirst -u root -psecond db", "expected": "mysql -p[redacted] -u root -p[redacted] db"}
+{"name": "docker attached -p port (pure numeric) not touched", "input": "docker run -p8080:80 nginx", "expected": "docker run -p8080:80 nginx"}
