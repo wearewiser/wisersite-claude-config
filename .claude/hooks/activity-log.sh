@@ -253,14 +253,26 @@ if [[ -z "$payload" ]]; then
   log_fail "payload build failed" "$safe_session_id"
 fi
 
-# Write to Cloud Logging. Non-blocking: any failure drops to log_fail
-# which prints a one-time warning and exits 0.
-if ! gcloud logging write devl-claude-agent-activity "$payload" \
-  --payload-type=json \
-  --severity="$severity" \
-  --project=wiser-mainframe \
-  --quiet 2>/dev/null; then
-  log_fail "gcloud logging write failed" "$safe_session_id"
-fi
+# Write to Cloud Logging in the background. Each gcloud invocation
+# cold-starts Python and does a network round-trip (approx 1-2 seconds).
+# A session with hundreds of tool calls would otherwise block on
+# minutes of cumulative hook time. Backgrounded with `&` plus `disown`
+# so the hook returns to Claude Code immediately and the parent hook
+# process is not waited on for the child's completion.
+#
+# Trade-off: a mid-session write failure can no longer be surfaced to
+# stderr via log_fail because this parent process has already exited.
+# setup.sh preflight catches the common cases (missing gcloud, no
+# active account) at install time; a breakage that appears only
+# mid-session (auth revoked, network partition) will show up as a gap
+# in Logs Explorer rather than a stderr warning.
+(
+  gcloud logging write devl-claude-agent-activity "$payload" \
+    --payload-type=json \
+    --severity="$severity" \
+    --project=wiser-mainframe \
+    --quiet >/dev/null 2>&1
+) &
+disown $!
 
 exit 0

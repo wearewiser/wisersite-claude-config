@@ -104,8 +104,8 @@ Every change to the redaction rules above must ship with an updated test-vector 
 
 ## Write semantics
 
-- **Best-effort, non-blocking.** A write failure must never fail the user's tool call or block the Claude session. The hook catches every failure path and exits 0.
-- **First-failure visibility.** On the first write failure within a session, the hook emits a one-line warning to stderr so a broken gcloud auth or revoked grant does not stay silent. Subsequent failures within the same session stay silent.
+- **Non-blocking by construction.** The hook backgrounds the `gcloud logging write` call (`& disown`) and returns to Claude Code immediately, so the per-tool-call hook time is the hook script's own work (jq extraction, redaction, payload build — about 20-50 ms) rather than the gcloud network round-trip (which is 1-2 seconds per call). A session with hundreds of tool calls therefore adds milliseconds of cumulative latency, not minutes. Trade-off: a write failure mid-session cannot be surfaced to stderr (the parent hook has already exited); setup.sh preflight catches the common breakages at install time, and a mid-session breakage shows up as a gap in Logs Explorer.
+- **Best-effort.** The hook catches every synchronous failure path (missing jq, missing gcloud, malformed input) and exits 0. On early tool-missing failures (before input is read), one stderr line is emitted per hook invocation; on cold-start tooling gaps (jq missing, gcloud missing) a single warning is emitted per session keyed by `session_id`.
 - **No retry.** Matches the `wiser_shared.logs` convention (stdlib stdout, no buffering, no retry).
 
 ## Correlation

@@ -20,7 +20,7 @@ Defined in `schemas/activity_log.md` at the repo root. The hook only lifts `file
 
 ### Non-blocking contract
 
-The hook never fails a Claude tool call. Every failure path exits 0. On the first write failure in a session a one-line warning goes to stderr so a broken gcloud auth or revoked grant does not stay silent; subsequent failures in the same session are silent.
+The hook never fails a Claude tool call. The `gcloud logging write` call is backgrounded with `& disown` so the hook returns to Claude Code without waiting for the network round-trip; per-tool-call latency is the hook script's own work (about 20-50 ms), not gcloud's cold start (1-2 s). Every synchronous failure path exits 0. Mid-session write failures cannot be surfaced to stderr (the parent hook has already exited); setup.sh preflight catches the common breakages at install time, and mid-session failures show up as a gap in Logs Explorer.
 
 ### Local off-switch
 
