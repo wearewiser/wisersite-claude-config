@@ -13,6 +13,17 @@ PHASE="${1:-pre}"
 SESSION_SENTINEL_DIR="${TMPDIR:-/tmp}"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Drain stdin up front, before any early-exit path. Claude Code pipes
+# the hook input via stdin; a large payload (a Bash call carrying a big
+# heredoc, a long Read window, etc) can exceed the pipe buffer. If we
+# exit before reading, the writer's next write() blocks until the pipe
+# drains and we are not here to drain it. The hook is now installed
+# user-globally into ~/.claude/settings.json, so this would affect
+# every tool call in every non-Wiser session on the machine. Always
+# consume stdin into `input` and let later checks decide whether to
+# exit.
+input="$(cat 2>/dev/null || true)"
+
 # Local off-switch.
 if [[ "${CLAUDE_ACTIVITY_LOG:-on}" == "off" ]]; then
   exit 0
@@ -25,7 +36,8 @@ fi
 # an unrelated project could coincidentally use the same ticket-naming
 # convention and leak its commands and file paths into Wiser's log.
 # Enforce the folder boundary explicitly: if cwd is not under
-# ~/Projects/Wiser/, exit 0 silently without reading any input.
+# ~/Projects/Wiser/, exit 0 silently. Stdin has already been drained
+# above so the early exit cannot block Claude.
 case "$PWD/" in
   "$HOME/Projects/Wiser/"*) ;;
   *) exit 0 ;;
@@ -67,8 +79,10 @@ if ! command -v jq >/dev/null 2>&1; then
   log_fail "jq not installed" ""
 fi
 
-# Read hook input.
-input="$(cat 2>/dev/null || true)"
+# Hook input was drained into `input` at the top, before any early-exit
+# path. Now that we are past the scope boundary and jq is confirmed,
+# bail quietly if the pipe delivered nothing (Claude may invoke the hook
+# with no payload during test runs).
 if [[ -z "$input" ]]; then
   exit 0
 fi
