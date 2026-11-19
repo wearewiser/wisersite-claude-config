@@ -21,10 +21,16 @@ perl -0777 -pe '
   # Known-prefix tokens. sk- requires a word boundary and min 20 chars
   # of suffix so task-, disk-, and similar substrings are not caught.
   s/\bsk-[A-Za-z0-9_\-]{20,}/sk-[redacted]/g;
-  s/\bghp_[A-Za-z0-9_]+/ghp_[redacted]/g;
-  s/\bghs_[A-Za-z0-9_]+/ghs_[redacted]/g;
-  s/\bgho_[A-Za-z0-9_]+/gho_[redacted]/g;
+  # GitHub token family: p=classic PAT, o=OAuth app, u=user-to-server,
+  # s=server-to-server, r=refresh. github_pat_ handles fine-grained PATs.
+  s/\bgh[pousr]_[A-Za-z0-9_]+/gh[redacted]/g;
   s/\bgithub_pat_[A-Za-z0-9_]+/github_pat_[redacted]/g;
+  # GitLab personal access tokens.
+  s/\bglpat-[A-Za-z0-9_\-]+/glpat-[redacted]/g;
+  # npm auth tokens.
+  s/\bnpm_[A-Za-z0-9_]+/npm_[redacted]/g;
+  # Stripe secret / restricted keys, live and test.
+  s/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9_]+/[redacted]/gi;
   s/\bxox[A-Za-z]-[A-Za-z0-9\-]+/xox[redacted]/g;
   s/\bAKIA[A-Z0-9]{16}/AKIA[redacted]/g;
   s/\bAIza[A-Za-z0-9_\-]+/AIza[redacted]/g;
@@ -36,18 +42,26 @@ perl -0777 -pe '
   s/([a-z][a-z0-9+.\-]*:\/\/)[^\s:@\/]+:[^\s@\/]+@/${1}[redacted]@/gi;
 
   # Headers: Authorization, X-API-Key, x-goog-api-key, Cookie, Private-Token.
-  # Covers -H, --header, and raw header forms.
-  s/((?:-H|--header)\s+["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^"\x27\n]+/${1}${2}${3}[redacted]/gi;
-  s/\b(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\s"\x27,;]+/${1}${2}[redacted]/gi;
+  # Covers -H / --header with any separator (=, whitespace, or none when
+  # the value is attached to a quote), and raw header forms anywhere in
+  # the command. The bare rule consumes an optional scheme word (Bearer,
+  # Basic, token, etc) before the value so a token containing `/` or `+`
+  # is still captured in full after the scheme is matched.
+  s/((?:-H|--header)\s*=?\s*["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^"\x27\n]+/${1}${2}${3}[redacted]/gi;
+  s/\b(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:[A-Za-z]+\s+)?[^\s"\x27,;]+/${1}${2}[redacted]/gi;
 
   # Bearer token form. Runs after the header rule so headers that
   # already carried Bearer tokens are folded into the header redaction
   # first; this catches Bearer tokens anywhere else in the command.
-  s/\bBearer\s+[A-Za-z0-9_\-\.=]+/Bearer [redacted]/gi;
+  # \S+ (not a restricted char class) so base64 / OAuth / JWT tokens
+  # containing / or + or ~ are captured in full.
+  s/\bBearer\s+\S+/Bearer [redacted]/gi;
 
   # curl -u user:pass form. Handles quoted argument too, so a password
   # containing whitespace does not leak its suffix after the first space.
-  s/(-u\s+)(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s]+)/${1}[redacted]/g;
+  # Scoped to curl / wget contexts so a general -u flag (mysql username,
+  # ssh user, etc) in other commands is not touched.
+  s/(\b(?:curl|wget)\b[^\n]*?\s-u\s+)(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s]+)/${1}[redacted]/g;
 
   # Flag forms: --password, --token, --secret, --api-key, --auth, --credential.
   # Separator accepts = or one-or-more whitespace characters, so repeated
@@ -60,7 +74,10 @@ perl -0777 -pe '
   # MySQL attached short-form password: -pPASSWORD (never -p<space>PASSWORD,
   # which mysql treats as a prompt). Scoped to mysql / mysqldump contexts
   # so a general -p flag (port, path) in other commands is not touched.
-  s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(\S+)/${1}-p[redacted]/gi;
+  # Quoted-body alternative handles -p"my pass" without leaking the tail
+  # after the first space; the unquoted branch stops at command
+  # separators so `-psecret; ls` keeps its `;`.
+  s/(\bmysql(?:dump)?\b[^\n]*?\s)-p(?:(["\x27])(?:\\.|(?!\2)[\s\S])*\2|[^\s;&|]+)/${1}-p[redacted]/gi;
 
   # JSON embedded in shell: "key":"value" where key contains a keyword.
   # Value body accepts backslash-escaped characters so an escaped quote

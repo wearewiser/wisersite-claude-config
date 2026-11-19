@@ -2,7 +2,7 @@
 {"name": "sk- prefix redacted with word boundary", "input": "curl -H 'X-Key: sk-proj1234567890abcdef1234567890'", "expected": "curl -H 'X-Key: sk-[redacted]'"}
 {"name": "sk- false-positive avoided for task-", "input": "kubectl get pods --selector task-worker", "expected": "kubectl get pods --selector task-worker"}
 {"name": "sk- false-positive avoided for disk-", "input": "gcloud compute disks list --filter disk-ssd", "expected": "gcloud compute disks list --filter disk-ssd"}
-{"name": "ghp_ prefix redacted", "input": "git push https://ghp_abcDEF12345678901234567890abcDEF12@github.com/x/y.git", "expected": "git push https://ghp_[redacted]@github.com/x/y.git"}
+{"name": "ghp_ prefix redacted (gh family consolidated to gh[redacted])", "input": "git push https://ghp_abcDEF12345678901234567890abcDEF12@github.com/x/y.git", "expected": "git push https://gh[redacted]@github.com/x/y.git"}
 {"name": "github_pat_ in TOKEN= env fully redacted (env rule wins)", "input": "export TOKEN=github_pat_11AAAAAAA0abcDEFghiJKLmnoPQRstuVWXyz012345", "expected": "export TOKEN=[redacted]"}
 {"name": "github_pat_ standalone redacted via prefix", "input": "echo The token is github_pat_11AAAAAAA0abcDEFghiJKL and nothing else", "expected": "echo The token is github_pat_[redacted] and nothing else"}
 {"name": "AKIA access key redacted", "input": "aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE", "expected": "aws configure set aws_access_key_id AKIA[redacted]"}
@@ -49,3 +49,15 @@
 {"name": "Heredoc body with KEY=value redacted (multi-line slurp)", "input": "cat > .env <<EOF\nDATABASE_URL=postgres://u:p@h/d\nAPI_KEY=abc123\nEOF", "expected": "cat > .env <<EOF\nDATABASE_URL=[redacted]\nAPI_KEY=[redacted]\nEOF"}
 {"name": "ordinary KEY=value without secret keyword passes through", "input": "LANG=en_GB.UTF-8 npm start", "expected": "LANG=en_GB.UTF-8 npm start"}
 {"name": "literal word 'token' as argument passes through", "input": "git log --grep 'auth token flow'", "expected": "git log --grep 'auth token flow'"}
+{"name": "wget --header= (equals separator) redacted", "input": "wget --header=\"Authorization: Bearer ab/c+d=\" u", "expected": "wget --header=\"Authorization: [redacted]\" u"}
+{"name": "curl -H attached quote (no space) redacted", "input": "curl -H\"Authorization: Bearer abc123\"", "expected": "curl -H\"Authorization: [redacted]\""}
+{"name": "Bearer token with / and + in base64 fully redacted", "input": "echo Bearer ab/cd+ef~gh", "expected": "echo Bearer [redacted]"}
+{"name": "MySQL -p quoted password with space fully redacted", "input": "mysql -u root -p\"my pass\" db", "expected": "mysql -u root -p[redacted] db"}
+{"name": "MySQL -p unquoted keeps the command separator", "input": "mysql -psecret; ls", "expected": "mysql -p[redacted]; ls"}
+{"name": "GitHub ghr_ refresh token redacted standalone", "input": "gh auth login --with-token <<< ghr_abcdefghijklmnop", "expected": "gh auth login --with-token <<< gh[redacted]"}
+{"name": "GitHub ghu_ user-to-server token redacted standalone", "input": "echo Using ghu_abcdefghij in header", "expected": "echo Using gh[redacted] in header"}
+{"name": "GitLab glpat token redacted standalone", "input": "curl -H 'Private-Token: glpat-abcdefghij' https://gitlab/", "expected": "curl -H 'Private-Token: [redacted]' https://gitlab/"}
+{"name": "GitLab glpat token redacted outside header", "input": "export CI_TOKEN=glpat-abcdefghij", "expected": "export CI_TOKEN=[redacted]"}
+{"name": "npm auth token redacted standalone", "input": "npm config set //registry.npmjs.org/:_authToken npm_abcdefghij", "expected": "npm config set //registry.npmjs.org/:_authToken npm_[redacted]"}
+{"name": "Stripe sk_live_ secret key redacted", "input": "stripe --key sk_live_abcdefghijklmnopqrst listen", "expected": "stripe --key [redacted] listen"}
+{"name": "Stripe rk_test_ restricted test key redacted", "input": "echo rk_test_abc123def456 rotate", "expected": "echo [redacted] rotate"}
