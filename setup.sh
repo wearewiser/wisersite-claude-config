@@ -334,11 +334,18 @@ install_activity_log_hooks() {
     # check, auditor, etc) into the same matcher group alongside ours, we
     # want to remove only our command from that group without wiping
     # theirs. Groups that end up with no surviving commands are dropped.
+    #
+    # The match is path-agnostic: `.claude/hooks/activity-log.sh` catches
+    # both the current $HOOKS_LINK path and any stale entry pointing at
+    # a prior location. Without this, a dev who moves ~/Projects/Wiser/
+    # and re-runs setup.sh leaves the old entry in settings.json and
+    # Claude fires both the dead hook (scope-exits) and the live one on
+    # every tool call, adding ~20-50 ms of latency per call.
     def strip_ours(key):
       (.hooks[key] // []) as $arr
       | .hooks[key] = (
           $arr
-          | map(.hooks |= map(select((.command // "") | contains($hooks_link + "/activity-log.sh") | not)))
+          | map(.hooks |= map(select((.command // "") | contains(".claude/hooks/activity-log.sh") | not)))
           | map(select((.hooks // []) | length > 0))
         );
     def add_ours(key; phase):
