@@ -9,6 +9,17 @@
 # write failure per session.
 
 set -u
+
+# Defence in depth: any unexpected exit path (unbound variable under
+# set -u, a trap from the shell, a signal) returns 0 so the hook can
+# never fail a Claude tool call. Installed BEFORE any work the shell
+# could crash on (HOOK_DIR computation under set -u, `cd` into a
+# directory with surprising permissions, the scope-boundary case),
+# so a failure in those lines still trips the EXIT handler and exits
+# 0 instead of propagating up to Claude Code. log_fail below is the
+# normal "write skipped" exit; this trap only catches the abnormal.
+trap 'exit 0' EXIT
+
 PHASE="${1:-pre}"
 SESSION_SENTINEL_DIR="${TMPDIR:-/tmp}"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,12 +53,6 @@ case "$PWD/" in
   "$HOME/Projects/Wiser/"*) ;;
   *) exit 0 ;;
 esac
-
-# Defence in depth: any unexpected exit path (unbound variable under
-# set -u, a trap from the shell, a signal) still returns 0 so the
-# hook can never fail a Claude tool call. log_fail below is the
-# normal "write skipped" exit; this trap only catches the abnormal.
-trap 'exit 0' EXIT
 
 # Everything below is best-effort. log_fail prints one warning per
 # session (keyed by session_id from the hook input) so a broken
@@ -186,15 +191,24 @@ if [[ -n "$session_id" ]]; then
   # before writing so our umask-077 create cannot be aliased to an
   # attacker-controlled file.
   if [[ ! -s "$actor_cache" || ! -O "$actor_cache" ]]; then
+    # Cold cache. `gh api user` can block for seconds if the GitHub
+    # API is slow or unreachable, so synchronous call would break the
+    # "hook adds ~20-50 ms" contract on the first tool call of a
+    # fresh session. Write the $USER fallback into the cache first so
+    # this call completes immediately with a usable actor, then
+    # background the gh lookup to overwrite the cache for subsequent
+    # calls in the same session. Trade-off: the first entry per
+    # session attributes to $USER rather than the gh login; on
+    # developer laptops those usually match anyway.
     rm -f "$actor_cache" 2>/dev/null || true
-    ( umask 077 && gh api user -q .login 2>/dev/null > "$actor_cache" ) || true
-    # If gh failed (not installed, not authenticated, network down) the
-    # redirect still left an empty file. Fill it with the $USER fallback
-    # so later calls in this session skip the retry instead of running
-    # `gh api` on every tool call for the rest of the session.
-    if [[ ! -s "$actor_cache" ]]; then
-      ( umask 077 && printf '%s' "${USER:-unknown}" > "$actor_cache" ) || true
-    fi
+    ( umask 077 && printf '%s' "${USER:-unknown}" > "$actor_cache" ) 2>/dev/null || true
+    (
+      gh_login="$(gh api user -q .login 2>/dev/null || true)"
+      if [[ -n "$gh_login" ]]; then
+        ( umask 077 && printf '%s' "$gh_login" > "$actor_cache" ) 2>/dev/null || true
+      fi
+    ) &
+    disown $! 2>/dev/null || true
   fi
   if [[ -O "$actor_cache" ]]; then
     actor="$(cat "$actor_cache" 2>/dev/null || true)"
@@ -202,7 +216,10 @@ if [[ -n "$session_id" ]]; then
     actor=""
   fi
 else
-  actor="$(gh api user -q .login 2>/dev/null || true)"
+  # No session_id to key a per-session cache. Skip the gh call rather
+  # than running it on every tool use (which would be synchronous and
+  # unbounded in latency); fall through to the $USER fallback below.
+  actor=""
 fi
 if [[ -z "$actor" ]]; then
   actor="${USER:-unknown}"
