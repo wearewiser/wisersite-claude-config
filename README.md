@@ -8,8 +8,11 @@ Shared Claude Code configuration for all Wiser repos. Single source of truth for
 wisersite-claude-config/
 ├── agents/                          # shared Claude agents loaded by all repos
 │   ├── branch-guardian.md
+│   ├── codebase-reviewer.md
+│   ├── design-fidelity-reviewer.md
 │   ├── dod-guardian.md
 │   ├── dor-guardian.md
+│   ├── pr-reviewer.md
 │   ├── secrets-guardian.md
 │   └── ticket-planner.md
 ├── .claude/skills/                  # user-invoked skills shared across repos
