@@ -296,7 +296,12 @@ install_activity_log_hooks() {
     return 0
   fi
 
-  mkdir -p "$(dirname "$USER_SETTINGS")"
+  if ! mkdir -p "$(dirname "$USER_SETTINGS")" 2>/dev/null; then
+    echo "  Warning: cannot create $(dirname "$USER_SETTINGS")."
+    echo "           Activity-log hooks not merged; rest of the agentic"
+    echo "           rig is unaffected."
+    return 0
+  fi
 
   local existing_content='{}'
   if [ -f "$USER_SETTINGS" ]; then
