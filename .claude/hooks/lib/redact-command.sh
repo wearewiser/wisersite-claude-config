@@ -42,16 +42,26 @@ perl -0777 -pe '
   s/([a-z][a-z0-9+.\-]*:\/\/)[^\s:@\/]+:[^\s@\/]+@/${1}[redacted]@/gi;
 
   # Headers: Authorization, X-API-Key, x-goog-api-key, Cookie, Private-Token.
-  # Covers -H / --header with any separator (=, whitespace, or none when
-  # the value is attached to a quote), and raw header forms anywhere in
-  # the command. The bare rule consumes an optional scheme word (Bearer,
-  # Basic, token, etc) before the value so a token containing `/` or `+`
-  # is still captured in full after the scheme is matched. Value body
-  # accepts `\.` escape pairs so a header like `Cookie: session=\"TAIL\"`
-  # (escaped quotes inside the shell-level quoted argument) consumes the
-  # escaped quote as a unit rather than stopping at it and leaving the
-  # suffix in the uploaded command.
-  s/((?:-H|--header)\s*=?\s*["\x27]?)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"\x27\n])+/${1}${2}${3}[redacted]/gi;
+  # Split by wrapper style so the value body terminates on the MATCHING
+  # wrapper only. A single-quoted wrapper whose value contains a
+  # double-quoted inner span (session="TAIL") used to leak the inner
+  # span because the shared body stopped at the first literal quote of
+  # either style; same for the mirror case. Separate rules per wrapper
+  # style keep each value body anchored to its own closing quote.
+  # Double-quoted wrapper: value stops at closing double quote; escape
+  # pairs inside are consumed as one unit so an inline \" does not
+  # terminate the match early.
+  s/((?:-H|--header)(?:=|\s*)")(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:\\.|[^"])+/${1}${2}${3}[redacted]/gi;
+  # Single-quoted wrapper: value stops at closing single quote. Shell
+  # single quotes do not process escapes, so no escape-pair handling.
+  s/((?:-H|--header)(?:=|\s*)\x27)(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\x27]+/${1}${2}${3}[redacted]/gi;
+  # Unquoted header arg (rare): the whole header is passed as one shell
+  # word with no outer wrapper. Stop at whitespace or either quote.
+  s/((?:-H|--header)(?:=|\s+))(?!["\x27])(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)[^\s"\x27,;\n]+/${1}${2}${3}[redacted]/gi;
+  # Bare header anywhere in the command (not inside -H/--header). The
+  # bare rule consumes an optional scheme word (Bearer, Basic, token,
+  # etc) before the value so a token containing `/` or `+` is still
+  # captured in full after the scheme is matched.
   s/\b(Authorization|X-API-Key|x-goog-api-key|Cookie|Private-Token)(\s*:\s*)(?:[A-Za-z]+\s+)?[^\s"\x27,;]+/${1}${2}[redacted]/gi;
 
   # Bearer token form. Runs after the header rule so headers that
@@ -78,6 +88,14 @@ perl -0777 -pe '
   # swallow its tail.
   s/(\b(?:curl|wget)\b[^\n]*?\s(?:-u(?:=|\s*)|--user(?:=|\s+)))(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|\\.|[^\s;&|"\x27\\])+/${1}[redacted]/g;
 
+  # Standalone -u / --user with user:password shape, used to catch
+  # repeated credential options in curl --next chains (the scoped rule
+  # above only redacts the first -u in a command because its
+  # curl|wget anchor is consumed on the first iteration). The required
+  # colon in the value discriminates from `mysql -u root` style bare
+  # usernames so this rule stays out of their way.
+  s/(\s(?:-u(?:=|\s*)|--user(?:=|\s+)))(?:"(?:\\.|[^"])*:(?:\\.|[^"])*"|\x27[^\x27]*:[^\x27]*\x27|[^\s;&|"\x27\\]+:[^\s;&|"\x27\\]+)/${1}[redacted]/g;
+
   # Flag forms: --password, --token, --secret, --api-key, --auth, --credential.
   # Separator accepts = or one-or-more whitespace characters, so repeated
   # spaces between flag and value do not bypass.
@@ -94,6 +112,13 @@ perl -0777 -pe '
   # Value body accepts backslash-escaped characters so an escaped quote
   # (\") inside the string does not end the match prematurely.
   s/("(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)"\s*:\s*)"(?:\\.|[^"])*"/${1}"[redacted]"/gi;
+
+  # Shell-escaped JSON: \"key\":\"value\" where the JSON is wrapped in
+  # a double-quoted shell argument so every quote arrives at the hook
+  # as \". Used by curl -d "{\"password\":\"...\"}" and equivalents;
+  # the literal-quote JSON rule above does not match this form because
+  # it expects raw quotes.
+  s/(\\"(?:[A-Za-z_\-]*(?:token|secret|key|password|pass|auth|credential|api[_\-]?key)[A-Za-z_\-]*)\\"\s*:\s*)\\"(?:\\.|[^\\"])*\\"/${1}\\"[redacted]\\"/gi;
 
   # KEY=value env assignments where the name contains a keyword anywhere,
   # or IS the keyword itself. \w* zero-or-more on either side matches

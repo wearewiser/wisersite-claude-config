@@ -67,3 +67,9 @@
 {"name": "Header value with escaped quote inside consumes through the escape", "input": "curl -H \"Cookie: session=\\\"TAIL\\\"\" https://api.example.com/", "expected": "curl -H \"Cookie: [redacted]\" https://api.example.com/"}
 {"name": "KEY=value with escaped whitespace continuation fully redacted", "input": "export SECRET=first\\ TAIL", "expected": "export SECRET=[redacted]"}
 {"name": "KEY=value with adjacent quoted fragments fully redacted (no quote preservation)", "input": "SECRET=\"first\"'TAIL' ./run.sh", "expected": "SECRET=[redacted] ./run.sh"}
+{"name": "Single-quoted header wrapper with inner double-quoted value redacted", "input": "curl -H 'Cookie: session=\"TAIL\"' https://example.invalid", "expected": "curl -H 'Cookie: [redacted]' https://example.invalid"}
+{"name": "Double-quoted header wrapper with inner single-quoted value redacted", "input": "curl -H \"Cookie: session='TAIL'\" https://example.invalid", "expected": "curl -H \"Cookie: [redacted]\" https://example.invalid"}
+{"name": "Repeated -u across curl --next chain both redacted", "input": "curl -u first:PLACEHOLDER https://one.invalid --next -u second:TAIL https://two.invalid", "expected": "curl -u [redacted] https://one.invalid --next -u [redacted] https://two.invalid"}
+{"name": "Shell-escaped JSON password in double-quoted -d arg redacted", "input": "curl -d \"{\\\"password\\\":\\\"TAIL\\\"}\" https://api.invalid", "expected": "curl -d \"{\\\"password\\\":\\\"[redacted]\\\"}\" https://api.invalid"}
+{"name": "mysql -u root bare username not touched by standalone -u rule (no colon)", "input": "mysql -u root -p'secret' db", "expected": "mysql -u root -p[redacted] db"}
+{"name": "docker -p port with space not matched by mysql -p rule", "input": "docker run -p 8080:80 nginx", "expected": "docker run -p 8080:80 nginx"}
