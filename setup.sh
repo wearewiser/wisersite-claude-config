@@ -409,7 +409,18 @@ install_activity_log_hooks() {
     fi
     rm -f "$settings_tmp"
   else
-    mv "$settings_tmp" "$USER_SETTINGS"
+    # Same soft-fail wrapper as the symlink branch above. Under
+    # setup.sh's `set -e`, a bare mv terminates the whole script if
+    # it fails (target read-only, FS full, permissions changed
+    # mid-run); wrap so the user gets a warning and the rest of
+    # setup proceeds.
+    if ! mv "$settings_tmp" "$USER_SETTINGS"; then
+      rm -f "$settings_tmp"
+      echo "  Warning: failed to mv $settings_tmp onto $USER_SETTINGS."
+      echo "           Activity-log hooks not merged; rest of the agentic"
+      echo "           rig is unaffected."
+      return 0
+    fi
   fi
   echo "  Activity-log hooks merged into: $USER_SETTINGS"
 }
