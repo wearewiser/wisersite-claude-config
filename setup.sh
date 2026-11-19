@@ -358,10 +358,38 @@ install_activity_log_hooks() {
   # Preserve a dotfiles-managed symlink. If $USER_SETTINGS is a symlink
   # (chezmoi, stow, yadm, home-manager etc), `mv` would replace the link
   # with a regular file and future dotfiles updates would stop reaching
-  # Claude Code. Write back through the link via `cat` so the target
-  # file gets updated in place.
+  # Claude Code. Write atomically to a sibling tempfile next to the
+  # symlink's actual target, then `mv` onto the target. A plain
+  # `cat > "$USER_SETTINGS"` would truncate the real file BEFORE the
+  # write completes, leaving an empty / partial settings.json if the
+  # write is interrupted (disk full, signal) and breaking Claude Code
+  # until a manual fix.
   if [ -L "$USER_SETTINGS" ]; then
-    cat "$settings_tmp" > "$USER_SETTINGS" && rm -f "$settings_tmp"
+    local link_target
+    link_target="$(readlink "$USER_SETTINGS")"
+    case "$link_target" in
+      /*) real_target="$link_target" ;;
+      *)  real_target="$(dirname "$USER_SETTINGS")/$link_target" ;;
+    esac
+    local real_dir
+    real_dir="$(dirname "$real_target")"
+    local real_tmp
+    real_tmp="$(mktemp "${real_dir}/settings.json.XXXXXX" 2>/dev/null)"
+    if [ -z "$real_tmp" ]; then
+      rm -f "$settings_tmp"
+      echo "  Warning: could not create a tempfile next to the symlink"
+      echo "           target $real_target. Activity-log hooks not merged;"
+      echo "           rest of the agentic rig is unaffected."
+      return 0
+    fi
+    if ! cat "$settings_tmp" > "$real_tmp"; then
+      rm -f "$real_tmp" "$settings_tmp"
+      echo "  Warning: failed to write $real_tmp. Activity-log hooks not"
+      echo "           merged; rest of the agentic rig is unaffected."
+      return 0
+    fi
+    mv "$real_tmp" "$real_target"
+    rm -f "$settings_tmp"
   else
     mv "$settings_tmp" "$USER_SETTINGS"
   fi
