@@ -10,7 +10,7 @@ Writes an entry to Cloud Logging for every Claude tool call so §5.3 and §11 of
 
 - Fires on `PreToolUse`, `PostToolUse`, and `PostToolUseFailure` (every tool, matcher `.*`).
 - Extracts the ticket id from the current git branch name (anything matching `WP23-\d+`). The ticket is cached at pre keyed by `tool_use_id` and re-used at post, so branch switches between the two phases do not split the pair across tickets. Branches without a ticket id are silently ignored.
-- Resolves the actor from `gh api user -q .login`, cached per `session_id` (not globally). Falls back to `$USER`.
+- Resolves the actor from `gh api user -q .login`, cached per `session_id` (not globally). Falls back to `$USER`, which is what lands on the FIRST entry of every session (the gh lookup is backgrounded to keep hook latency under ~50 ms) and on every entry when `gh` is missing or unauthenticated. Final fallback `unknown`. Query filters on `actor` in Logs Explorer should widen to catch both shapes until the gh login has populated the cache — see `schemas/activity_log.md` for the detailed semantics.
 - Redacts the shell command string before capping it at 500 characters. Full rule list in `../../schemas/activity_log.md`.
 - Emits via `gcloud logging write` under the invoking developer's **active `gcloud auth` account** (same store `gcloud logging write` reads from). No service account key is distributed to laptops.
 

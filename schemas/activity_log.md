@@ -33,7 +33,7 @@ Entries are JSON. Core fields are required for every entry; sidecar fields are o
 | --- | --- | --- | --- | --- |
 | `ticket_id` | string | yes | `WP23-NNN` | Session-scoped; extracted from the current git branch name or passed in by the caller. |
 | `action` | enum string | yes | one of the values in the closed enum below | Add-only migration. |
-| `actor` | string | yes | GitHub-login style | Local = user's gh login; CI Claude = `claude-code[bot]`; Cloud Run job = function-SA-derived name (e.g. `cg-devl-ai-system`). No email, no display name, no personal data. |
+| `actor` | string | yes | GitHub-login style preferred; `$USER` on local sessions where `gh` is missing / unauthenticated / still cold; final fallback `unknown` | Local = user's gh login where available. The hook's actor cache is cold at the start of every session; the first entry is written with `$USER` while a backgrounded `gh api user -q .login` populates the cache for subsequent entries. If `gh` is absent or unauth, every entry in the session uses `$USER`. On most dev laptops `$USER` is close to the gh login, but Logs Explorer queries that filter by `actor` should widen the clause (e.g. `jsonPayload.actor =~ "john"`) to catch both shapes until the user's gh login is cached. CI Claude = `claude-code[bot]`; Cloud Run job = function-SA-derived name (e.g. `cg-devl-ai-system`). No email, no display name, no personal data. |
 | `timestamp` | string | yes | RFC3339 in UTC | e.g. `2026-11-18T12:34:56Z`. Python: `datetime.now(timezone.utc).isoformat()`. Shell: `date -u +%FT%TZ`. |
 | `link` | string | yes | URL or opaque ID | PR URL / commit SHA / CircleCI job URL / deployment ID. For `tool_use` entries, the Claude session identifier. |
 
