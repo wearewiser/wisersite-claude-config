@@ -208,6 +208,7 @@ Note: `wisersite-and-payload-plugin` has **no `main` branch**; always branch off
 | A Payload field silently resets on sibling edit | A field named `updatedAt` collides with Payload's auto-timestamp. Rename it (`revisedAt` etc.) and translate at the loader. |
 | Alerts not firing | Alerts route to `data-monitors` Slack first, PagerDuty as escalation. Follow the uniform `<area> - <subject>` naming pattern. |
 | Jira MCP errors with "needs authentication" | OAuth token expired. Open a Claude session, load `mcp__atlassian__authenticate` via ToolSearch, complete the browser flow. |
+| Activity-log entries not landing in Logs Explorer | Check `gcloud auth list --filter=status:ACTIVE`, confirm cwd is under `~/Projects/Wiser/`, and the current git branch has `WP23-\d+` in it. The hook writes a one-line stderr warning on the first failure per session. Full troubleshooting in `.claude/hooks/README.md`. |
 
 ---
 
@@ -251,6 +252,18 @@ User-invoked skills:
 
 - `/user-story-writer` - draft, amend, split, or tidy Wiser user stories from
   Claude Design canvases, Jira tickets, screenshots, meeting notes, transcripts.
+
+Shared hooks (merged into `~/.claude/settings.json` by `setup.sh`, no-op outside
+`~/Projects/Wiser/`):
+
+- `activity-log` - one Cloud Logging entry per Claude tool call, written to
+  `devl-claude-agent-activity` on `wiser-mainframe` under the invoking
+  developer's own `gcloud auth` account. Ticket id extracted from the current
+  git branch (`WP23-\d+`); non-ticket branches silently skip. Payload shape,
+  action enum, severity, and redaction rules pinned in `schemas/activity_log.md`.
+  Needs `jq` and `gcloud` on PATH; hook never fails a tool call. Incident
+  lookup: `logName="projects/wiser-mainframe/logs/devl-claude-agent-activity"
+  AND jsonPayload.ticket_id="WP23-NNN"` in Logs Explorer.
 
 Full ruleset (what Claude will and will not do, tenant isolation, no-PII,
 breach handling, DoD): `guardrails/DEVELOPMENT_GUARDRAILS.md`.

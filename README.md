@@ -17,10 +17,21 @@ wisersite-claude-config/
 │   ├── ticket-planner.md
 │   └── local-only/                  # human-invoked agents, never copied to CI
 │       └── codebase-reviewer.md
-├── .claude/skills/                  # user-invoked skills shared across repos
-│   └── user-story-writer/
-│       ├── SKILL.md
-│       └── data-mapping/            # static copy of Wiser Data Brief tabs
+├── .claude/
+│   ├── settings.example.json        # reference shape for the generated shared settings.json
+│   ├── hooks/                       # shared Claude Code hooks loaded by all repos
+│   │   ├── activity-log.sh
+│   │   ├── lib/
+│   │   │   └── redact-command.sh
+│   │   ├── tests/
+│   │   │   ├── redaction-vectors.jsonl
+│   │   │   ├── run-redaction-tests.sh
+│   │   │   └── probe-input.sh
+│   │   └── README.md
+│   └── skills/                      # user-invoked skills shared across repos
+│       └── user-story-writer/
+│           ├── SKILL.md
+│           └── data-mapping/        # static copy of Wiser Data Brief tabs
 ├── docs/ADR/                        # Wiser-wide architecture decisions
 │   ├── 0000-use-adrs.md
 │   ├── 0001-llm-path-vertex-hosted-claude.md
@@ -28,6 +39,8 @@ wisersite-claude-config/
 ├── guardrails/                      # Wiser-wide development guardrails
 │   ├── DEVELOPMENT_GUARDRAILS.md
 │   └── CHANGELOG.md
+├── schemas/                         # pinned shared schemas (single source of truth)
+│   └── activity_log.md
 ├── .github/workflows/
 │   ├── claude-reusable.yml          # the actual Claude workflow logic
 │   └── claude.yml                   # caller so this repo also gets Claude reviews
@@ -42,13 +55,16 @@ wisersite-claude-config/
 
 Claude Code discovers agents and skills by walking up the directory tree from the current working directory. Because `~/Projects/Wiser/` has no `.git` file, anything placed at `~/Projects/Wiser/.claude/agents/` or `~/Projects/Wiser/.claude/skills/` is discovered for all repos inside that folder, without affecting other projects on your machine.
 
-`setup.sh` creates five symlinks under `~/Projects/Wiser/.claude/`:
+`setup.sh` creates six symlinks under `~/Projects/Wiser/.claude/`:
 
 - `agents/` -> this repo's `agents/` folder
 - `skills/` -> this repo's `.claude/skills/` folder
 - `adr/` -> this repo's `docs/ADR/` folder
 - `guardrails/` -> this repo's `guardrails/` folder
+- `hooks/` -> this repo's `.claude/hooks/` folder
 - `PROJECT_KNOWLEDGE.md` -> this repo's `PROJECT_KNOWLEDGE.md` file (file-level symlink)
+
+It also merges three `PreToolUse` / `PostToolUse` / `PostToolUseFailure` hook entries into `~/.claude/settings.json` (user-level) pointing at the hooks symlink with absolute paths; see the Activity-log hook section below for why.
 
 It also appends a `claude()` shell function to `~/.zshrc` that silently runs `git pull` on this repo every time you invoke `claude`, so agents, skills, ADRs, guardrails, and project knowledge are always up to date with no manual steps.
 
@@ -60,6 +76,14 @@ Guardrails and project knowledge are a different shape from ADRs: they must load
 Claude Code's hierarchical CLAUDE.md discovery then surfaces both in every session started under `~/Projects/Wiser/`.
 
 Repos that want Claude to consult the shared ADRs should point at them from their `CLAUDE.md`, e.g. `Cross-repo ADRs: ~/Projects/Wiser/.claude/adr/`. ADRs are read on demand (not auto-loaded), so this only matters for repos where cross-cutting decisions are relevant.
+
+### Activity-log hook
+
+A shared `PreToolUse`, `PostToolUse`, and `PostToolUseFailure` hook (`.claude/hooks/activity-log.sh`) writes one entry per Claude tool call to Cloud Logging log `devl-claude-agent-activity` on `wiser-mainframe`, so guardrails §5.3 and §11 have a real audit trail to query during an incident. The hook extracts the ticket id from the current git branch (skipping silently on non-ticket branches), redacts secrets out of shell command strings, and never fails a tool call. Payload shape is pinned in `schemas/activity_log.md`; hook README is at `.claude/hooks/README.md`.
+
+The hook fires in every Claude Code session on your machine, not only in Wiser repos. Claude Code loads `~/.claude/settings.json` on every session startup, and `setup.sh` merges the three hook entries into that file (preserving your existing `theme`, `permissions`, and anything else that already lives there). The hook itself is a no-op outside Wiser repos: it extracts a `WP23-NNN` ticket from the current git branch and exits 0 silently if there is no match, so sessions in non-Wiser projects pay only a `jq` and `git rev-parse` call per tool use. This user-level distribution is necessary because Claude Code does not walk the directory tree looking for `settings.json` the way it does for `CLAUDE.md`, so a shared file at `~/Projects/Wiser/.claude/settings.json` would never be discovered. The in-repo `.claude/settings.example.json` is a reference shape only; Claude Code does not load files with that name.
+
+Writes run under the invoking developer's active `gcloud auth` account (the same account that `gcloud logging write` uses). No service account key is distributed to laptops. Prerequisites: `gcloud` on PATH and an active account via `gcloud auth login`. `setup.sh` warns at install time if either is missing. Local off-switch: `export CLAUDE_ACTIVITY_LOG=off`.
 
 ### CI
 
