@@ -337,6 +337,23 @@ install_activity_log_hooks() {
     echo "           rig is unaffected."
     return 0
   fi
+  # Announce any stale entries we are about to replace so the removal
+  # is not silent. Matches the same shape the strip helper below does.
+  local stale_count=0
+  stale_count="$(printf '%s' "$existing_content" | jq '
+    [(.hooks.PreToolUse // []),
+     (.hooks.PostToolUse // []),
+     (.hooks.PostToolUseFailure // [])]
+    | map(.[].hooks[]?.command? // ""
+          | select(test("/\\.claude/hooks/activity-log\\.sh (pre|post|post-failure)$")))
+    | length
+  ' 2>/dev/null)" || stale_count=0
+  if [ "${stale_count:-0}" -gt 0 ] 2>/dev/null; then
+    echo "  Note: replacing $stale_count stale Wiser activity-log entries"
+    echo "        in $USER_SETTINGS (shape: *.claude/hooks/activity-log.sh"
+    echo "        <pre|post|post-failure>). Unrelated hooks are left alone."
+  fi
+
   if ! printf '%s' "$existing_content" | jq \
     --arg hooks_link "$HOOKS_LINK" '
     # Strip our activity-log entries at the single-hook granularity, not
@@ -345,17 +362,19 @@ install_activity_log_hooks() {
     # want to remove only our command from that group without wiping
     # theirs. Groups that end up with no surviving commands are dropped.
     #
-    # The match is path-agnostic: `.claude/hooks/activity-log.sh` catches
-    # both the current $HOOKS_LINK path and any stale entry pointing at
-    # a prior location. Without this, a dev who moves ~/Projects/Wiser/
-    # and re-runs setup.sh leaves the old entry in settings.json and
-    # Claude fires both the dead hook (scope-exits) and the live one on
-    # every tool call, adding ~20-50 ms of latency per call.
+    # The match anchors to the FULL shape we write: a command ending in
+    # `.claude/hooks/activity-log.sh <phase>` where <phase> is one of
+    # pre / post / post-failure. That catches both the current
+    # $HOOKS_LINK path AND any stale entry from a prior install
+    # location (a dev who moved ~/Projects/Wiser/ and re-ran setup.sh),
+    # while leaving an unrelated personal hook named
+    # `~/.claude/hooks/activity-log.sh` alone because it will not end
+    # with our phase argument.
     def strip_ours(key):
       (.hooks[key] // []) as $arr
       | .hooks[key] = (
           $arr
-          | map(.hooks |= map(select((.command // "") | contains(".claude/hooks/activity-log.sh") | not)))
+          | map(.hooks |= map(select((.command // "") | test("/\\.claude/hooks/activity-log\\.sh (pre|post|post-failure)$") | not)))
           | map(select((.hooks // []) | length > 0))
         );
     def add_ours(key; phase):
