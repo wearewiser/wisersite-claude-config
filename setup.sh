@@ -498,21 +498,31 @@ else
   # design, so there's no mid-session signal), and the audit log that
   # guardrails sections 5.3 and 11 depend on stays empty while
   # everyone assumes it works. One probe write here surfaces the gap
-  # at install time. Marked `action=setup_probe` so routine audit
-  # queries can filter it out.
-  probe_actor="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
-  probe_payload="$(printf '{"ticket_id":"preflight","action":"setup_probe","actor":"%s","timestamp":"%s","link":"setup.sh"}' \
-    "${probe_actor:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
-  probe_error="$(gcloud logging write devl-claude-agent-activity "$probe_payload" \
+  # at install time.
+  #
+  # The probe writes to a DIFFERENT Cloud Logging log
+  # (`devl-claude-agent-setup-probe`, auto-created on first write)
+  # rather than the audit log. roles/logging.logWriter grants write
+  # to all logs in the project, so the probe exercises the same role
+  # binding without putting a schema-off record into the pinned v1
+  # audit stream (`devl-claude-agent-activity`, schema in
+  # schemas/activity_log.md). Actor uses $USER (same fallback the
+  # runtime hook uses for cold cache) to avoid duplicating the
+  # authenticated writer identity as the gcloud-account email, which
+  # the schema's actor contract explicitly forbids.
+  probe_actor="${USER:-unknown}"
+  probe_payload="$(printf '{"actor":"%s","timestamp":"%s","link":"setup.sh","source":"setup_probe"}' \
+    "$probe_actor" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+  probe_error="$(gcloud logging write devl-claude-agent-setup-probe "$probe_payload" \
     --payload-type=json \
     --severity=INFO \
     --project=wiser-mainframe 2>&1 >/dev/null)" || probe_failed=1
   if [ -n "${probe_failed:-}" ]; then
-    echo "  Warning: test write to log 'devl-claude-agent-activity' on"
-    echo "           wiser-mainframe failed. The hook will silently drop"
-    echo "           every write at runtime. Usually means the account"
-    echo "           ($probe_actor) lacks roles/logging.logEntries.create"
-    echo "           on wiser-mainframe. gcloud said:"
+    echo "  Warning: test write to log 'devl-claude-agent-setup-probe' on"
+    echo "           wiser-mainframe failed. The runtime hook will silently"
+    echo "           drop every write. Usually means the active account"
+    echo "           lacks roles/logging.logEntries.create on wiser-mainframe."
+    echo "           gcloud said:"
     echo "             $probe_error"
   else
     echo "  gcloud logging write probe: OK"
