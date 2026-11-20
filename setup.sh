@@ -305,7 +305,17 @@ install_activity_log_hooks() {
 
   local existing_content='{}'
   if [ -f "$USER_SETTINGS" ]; then
-    existing_content="$(cat "$USER_SETTINGS")"
+    # Guard the read: a file that exists but is not readable (mode
+    # 000, root-owned after a `sudo claude` run) would otherwise kill
+    # setup.sh under `set -e`, skipping every subsequent step. Match
+    # the soft-fail shape used by the rest of the function.
+    if ! existing_content="$(cat "$USER_SETTINGS" 2>/dev/null)"; then
+      echo "  Warning: $USER_SETTINGS exists but cannot be read."
+      echo "           Activity-log hooks not merged. Check the file"
+      echo "           permissions and re-run setup.sh. The rest of the"
+      echo "           agentic rig is unaffected."
+      return 0
+    fi
     if ! printf '%s' "$existing_content" | jq empty 2>/dev/null; then
       echo "  Warning: $USER_SETTINGS exists but is not valid JSON."
       echo "           Activity-log hooks not merged. Fix the file by hand"
