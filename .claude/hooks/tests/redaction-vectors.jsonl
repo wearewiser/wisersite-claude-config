@@ -84,3 +84,5 @@
 {"name": "mongosh space-separated -p password redacted", "input": "mongosh -u admin -p adminpass db", "expected": "mongosh -u admin -p [redacted] db"}
 {"name": "mongo (legacy) space-separated -p password redacted", "input": "mongo -u admin -p adminpass db", "expected": "mongo -u admin -p [redacted] db"}
 {"name": "ls -a flag not matched by redis-cli -a rule (needs redis-cli anchor)", "input": "ls -a /tmp", "expected": "ls -a /tmp"}
+{"name": "sshpass -p escape-whitespace continuation fully redacted", "input": "sshpass -p first\\ TAIL ssh host", "expected": "sshpass -p [redacted] ssh host"}
+{"name": "redis-cli -a escape-whitespace continuation fully redacted", "input": "redis-cli -a foo\\ bar baz", "expected": "redis-cli -a [redacted] baz"}
