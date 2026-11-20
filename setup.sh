@@ -511,21 +511,41 @@ else
   # authenticated writer identity as the gcloud-account email, which
   # the schema's actor contract explicitly forbids.
   probe_actor="${USER:-unknown}"
-  probe_payload="$(printf '{"actor":"%s","timestamp":"%s","link":"setup.sh","source":"setup_probe"}' \
-    "$probe_actor" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
-  probe_error="$(gcloud logging write devl-claude-agent-setup-probe "$probe_payload" \
-    --payload-type=json \
-    --severity=INFO \
-    --project=wiser-mainframe 2>&1 >/dev/null)" || probe_failed=1
-  if [ -n "${probe_failed:-}" ]; then
-    echo "  Warning: test write to log 'devl-claude-agent-setup-probe' on"
-    echo "           wiser-mainframe failed. The runtime hook will silently"
-    echo "           drop every write. Usually means the active account"
-    echo "           lacks roles/logging.logEntries.create on wiser-mainframe."
-    echo "           gcloud said:"
-    echo "             $probe_error"
+  # Build the JSON payload via jq --arg rather than printf-splicing
+  # $USER into a literal template. A `"` or `\` in $USER would
+  # otherwise produce malformed JSON, gcloud would reject the write,
+  # and the probe would report a permissions failure that masks the
+  # real credential status. activity-log.sh builds its payload the
+  # same way for the same reason. jq is a hard prerequisite of the
+  # hook (install_activity_log_hooks above skips installation when
+  # jq is missing), so skip the probe when jq is absent and point
+  # the user at the right fix.
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  Skipping gcloud logging write probe: jq not on PATH. Install"
+    echo "           jq (brew install jq / apt install jq) and re-run"
+    echo "           setup.sh; the runtime hook also needs jq to parse"
+    echo "           Claude's hook input."
   else
-    echo "  gcloud logging write probe: OK"
+    probe_payload="$(jq -nc \
+      --arg actor "$probe_actor" \
+      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg link "setup.sh" \
+      --arg source "setup_probe" \
+      '{actor: $actor, timestamp: $timestamp, link: $link, source: $source}')"
+    probe_error="$(gcloud logging write devl-claude-agent-setup-probe "$probe_payload" \
+      --payload-type=json \
+      --severity=INFO \
+      --project=wiser-mainframe 2>&1 >/dev/null)" || probe_failed=1
+    if [ -n "${probe_failed:-}" ]; then
+      echo "  Warning: test write to log 'devl-claude-agent-setup-probe' on"
+      echo "           wiser-mainframe failed. The runtime hook will silently"
+      echo "           drop every write. Usually means the active account"
+      echo "           lacks roles/logging.logEntries.create on wiser-mainframe."
+      echo "           gcloud said:"
+      echo "             $probe_error"
+    else
+      echo "  gcloud logging write probe: OK"
+    fi
   fi
 fi
 
