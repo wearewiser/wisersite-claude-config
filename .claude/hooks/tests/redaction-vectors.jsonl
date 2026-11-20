@@ -78,3 +78,9 @@
 {"name": "Double-quoted header with adjacent unquoted fragment fully redacted (closing quote dropped)", "input": "curl -H \"Authorization: Basic \"TAIL https://x", "expected": "curl -H \"Authorization: [redacted] https://x"}
 {"name": "Repeated mysql -p options both redacted (standalone letters-required rule)", "input": "mysql -pfirst -u root -psecond db", "expected": "mysql -p[redacted] -u root -p[redacted] db"}
 {"name": "docker attached -p port (pure numeric) not touched", "input": "docker run -p8080:80 nginx", "expected": "docker run -p8080:80 nginx"}
+{"name": "docker login space-separated -p password redacted", "input": "docker login -u bob -p hunter2xyz registry", "expected": "docker login -u bob -p [redacted] registry"}
+{"name": "sshpass space-separated -p password redacted", "input": "sshpass -p s3cret ssh host", "expected": "sshpass -p [redacted] ssh host"}
+{"name": "redis-cli space-separated -a password redacted", "input": "redis-cli -a supersecret", "expected": "redis-cli -a [redacted]"}
+{"name": "mongosh space-separated -p password redacted", "input": "mongosh -u admin -p adminpass db", "expected": "mongosh -u admin -p [redacted] db"}
+{"name": "mongo (legacy) space-separated -p password redacted", "input": "mongo -u admin -p adminpass db", "expected": "mongo -u admin -p [redacted] db"}
+{"name": "ls -a flag not matched by redis-cli -a rule (needs redis-cli anchor)", "input": "ls -a /tmp", "expected": "ls -a /tmp"}

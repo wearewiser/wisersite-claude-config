@@ -131,6 +131,18 @@ perl -0777 -pe '
   # log, under-redaction of a secret is not.
   s/(\s-p)(?=(?:"[^"]*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\])*[A-Za-z])(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\]+)/${1}[redacted]/g;
 
+  # Space-separated password flags in known authentication contexts.
+  # Schema rule 3 covers `-p <value> where the context is clearly auth`;
+  # these rules implement that for the common tools where -p / -a is a
+  # password and takes the NEXT shell word (not attached). Scoped per
+  # tool so a generic -p (ssh port, docker port) or -a (ls, ascii)
+  # elsewhere is left alone. The value matcher handles quoted bodies
+  # and plain shell words.
+  # docker login -p PASSWORD, sshpass -p PASSWORD, mongo(sh) -p PASSWORD.
+  s/(\b(?:docker\s+login|sshpass|mongo(?:sh)?)\b[^\n]*?\s-p\s+)(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\]+)/${1}[redacted]/gi;
+  # redis-cli -a PASSWORD.
+  s/(\bredis-cli\b[^\n]*?\s-a\s+)(?:"(?:\\.|[^"])*"|\x27[^\x27]*\x27|[^\s;&|"\x27\\]+)/${1}[redacted]/gi;
+
   # JSON embedded in shell: "key":"value" where key contains a keyword.
   # Value body accepts backslash-escaped characters so an escaped quote
   # (\") inside the string does not end the match prematurely.
