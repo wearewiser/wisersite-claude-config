@@ -489,6 +489,34 @@ else
   else
     echo "  gcloud auth + project: OK"
   fi
+
+  # Real-write probe. The preflight above only confirms that a gcloud
+  # account is active and that the project is wiser-mainframe; it does
+  # NOT confirm that this account holds roles/logging.logEntries.create
+  # on wiser-mainframe. Without that role, every runtime write fails
+  # PERMISSION_DENIED silently (the hook discards gcloud's stderr by
+  # design, so there's no mid-session signal), and the audit log that
+  # guardrails sections 5.3 and 11 depend on stays empty while
+  # everyone assumes it works. One probe write here surfaces the gap
+  # at install time. Marked `action=setup_probe` so routine audit
+  # queries can filter it out.
+  probe_actor="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
+  probe_payload="$(printf '{"ticket_id":"preflight","action":"setup_probe","actor":"%s","timestamp":"%s","link":"setup.sh"}' \
+    "${probe_actor:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+  probe_error="$(gcloud logging write devl-claude-agent-activity "$probe_payload" \
+    --payload-type=json \
+    --severity=INFO \
+    --project=wiser-mainframe 2>&1 >/dev/null)" || probe_failed=1
+  if [ -n "${probe_failed:-}" ]; then
+    echo "  Warning: test write to log 'devl-claude-agent-activity' on"
+    echo "           wiser-mainframe failed. The hook will silently drop"
+    echo "           every write at runtime. Usually means the account"
+    echo "           ($probe_actor) lacks roles/logging.logEntries.create"
+    echo "           on wiser-mainframe. gcloud said:"
+    echo "             $probe_error"
+  else
+    echo "  gcloud logging write probe: OK"
+  fi
 fi
 
 echo ""
