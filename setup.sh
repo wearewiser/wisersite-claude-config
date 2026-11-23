@@ -8,6 +8,8 @@ AGENTS_LINK="$WISER_CLAUDE_DIR/agents"
 SKILLS_LINK="$WISER_CLAUDE_DIR/skills"
 ADR_LINK="$WISER_CLAUDE_DIR/adr"
 GUARDRAILS_LINK="$WISER_CLAUDE_DIR/guardrails"
+HOOKS_LINK="$WISER_CLAUDE_DIR/hooks"
+USER_SETTINGS="$HOME/.claude/settings.json"
 PROJECT_KNOWLEDGE_LINK="$WISER_CLAUDE_DIR/PROJECT_KNOWLEDGE.md"
 ZSHRC="$HOME/.zshrc"
 
@@ -74,6 +76,20 @@ fi
 
 ln -s "$REPO_DIR/guardrails" "$GUARDRAILS_LINK"
 echo "Symlink created: $GUARDRAILS_LINK -> $REPO_DIR/guardrails"
+
+# Create hooks symlink (activity-log + any future shared hooks). Mirrors
+# the shape of the four symlinks above. Hooks are discovered by Claude
+# Code sessions in any Wiser repo via the shared settings.json below.
+if [ -L "$HOOKS_LINK" ]; then
+  echo "Removing existing symlink at $HOOKS_LINK"
+  rm "$HOOKS_LINK"
+elif [ -d "$HOOKS_LINK" ]; then
+  echo "Error: $HOOKS_LINK exists as a real directory. Move or delete it first."
+  exit 1
+fi
+
+ln -s "$REPO_DIR/.claude/hooks" "$HOOKS_LINK"
+echo "Symlink created: $HOOKS_LINK -> $REPO_DIR/.claude/hooks"
 
 # Create project-knowledge symlink (file-level, not folder). Unlike the four
 # folder symlinks above, PROJECT_KNOWLEDGE.md is a single file at the repo
@@ -259,6 +275,297 @@ else
   echo "       Refusing to run until the block is restored to a single BEGIN/END"
   echo "       pair or removed entirely."
   exit 1
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# Claude activity-log hooks: merge into user-level ~/.claude/settings.json.
+# Soft-fails so an optional observability hook never blocks a fresh setup;
+# the critical install steps (symlinks, CLAUDE.md imports, zshrc wrapper)
+# have already run above. On a missing jq or a malformed existing
+# settings.json, print a warning and continue. The hook is a best-effort
+# audit tool, not a hard requirement for the rest of the agentic rig.
+# ---------------------------------------------------------------------------
+install_activity_log_hooks() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  Warning: jq is not on PATH. Activity-log hooks not merged into"
+    echo "           $USER_SETTINGS. Install jq (brew install jq) and re-run"
+    echo "           setup.sh when convenient; the rest of the agentic rig"
+    echo "           is unaffected."
+    return 0
+  fi
+
+  if ! mkdir -p "$(dirname "$USER_SETTINGS")" 2>/dev/null; then
+    echo "  Warning: cannot create $(dirname "$USER_SETTINGS")."
+    echo "           Activity-log hooks not merged; rest of the agentic"
+    echo "           rig is unaffected."
+    return 0
+  fi
+
+  local existing_content='{}'
+  if [ -f "$USER_SETTINGS" ]; then
+    # Guard the read: a file that exists but is not readable (mode
+    # 000, root-owned after a `sudo claude` run) would otherwise kill
+    # setup.sh under `set -e`, skipping every subsequent step. Match
+    # the soft-fail shape used by the rest of the function.
+    if ! existing_content="$(cat "$USER_SETTINGS" 2>/dev/null)"; then
+      echo "  Warning: $USER_SETTINGS exists but cannot be read."
+      echo "           Activity-log hooks not merged. Check the file"
+      echo "           permissions and re-run setup.sh. The rest of the"
+      echo "           agentic rig is unaffected."
+      return 0
+    fi
+    if ! printf '%s' "$existing_content" | jq empty 2>/dev/null; then
+      echo "  Warning: $USER_SETTINGS exists but is not valid JSON."
+      echo "           Activity-log hooks not merged. Fix the file by hand"
+      echo "           (or move it aside) and re-run setup.sh. The rest of"
+      echo "           the agentic rig is unaffected."
+      return 0
+    fi
+  fi
+
+  # Matches the symlink-branch pattern below: `|| true` keeps the
+  # assignment non-fatal under `set -e` (mktemp failures: disk full,
+  # bad $TMPDIR), empty-value check routes into the standard
+  # warn-and-return soft-fail path.
+  local settings_tmp=""
+  settings_tmp="$(mktemp "${USER_SETTINGS}.XXXXXX" 2>/dev/null)" || true
+  if [ -z "$settings_tmp" ]; then
+    echo "  Warning: could not create a tempfile next to $USER_SETTINGS."
+    echo "           Activity-log hooks not merged; rest of the agentic"
+    echo "           rig is unaffected."
+    return 0
+  fi
+  # Announce any stale entries we are about to replace so the removal
+  # is not silent. Matches the same shape the strip helper below does.
+  local stale_count=0
+  stale_count="$(printf '%s' "$existing_content" | jq '
+    [(.hooks.PreToolUse // []),
+     (.hooks.PostToolUse // []),
+     (.hooks.PostToolUseFailure // [])]
+    | map(.[].hooks[]?.command? // ""
+          | select(test("/\\.claude/hooks/activity-log\\.sh (pre|post|post-failure)$")))
+    | length
+  ' 2>/dev/null)" || stale_count=0
+  if [ "${stale_count:-0}" -gt 0 ] 2>/dev/null; then
+    echo "  Note: replacing $stale_count stale Wiser activity-log entries"
+    echo "        in $USER_SETTINGS (shape: *.claude/hooks/activity-log.sh"
+    echo "        <pre|post|post-failure>). Unrelated hooks are left alone."
+  fi
+
+  if ! printf '%s' "$existing_content" | jq \
+    --arg hooks_link "$HOOKS_LINK" '
+    # Strip our activity-log entries at the single-hook granularity, not
+    # the whole matcher group. If a dev added an unrelated hook (security
+    # check, auditor, etc) into the same matcher group alongside ours, we
+    # want to remove only our command from that group without wiping
+    # theirs. Groups that end up with no surviving commands are dropped.
+    #
+    # The match anchors to the FULL shape we write: a command ending in
+    # `.claude/hooks/activity-log.sh <phase>` where <phase> is one of
+    # pre / post / post-failure. That catches both the current
+    # $HOOKS_LINK path AND any stale entry from a prior install
+    # location (a dev who moved ~/Projects/Wiser/ and re-ran setup.sh),
+    # while leaving an unrelated personal hook named
+    # `~/.claude/hooks/activity-log.sh` alone because it will not end
+    # with our phase argument.
+    def strip_ours(key):
+      (.hooks[key] // []) as $arr
+      | .hooks[key] = (
+          $arr
+          | map(.hooks |= map(select((.command // "") | test("/\\.claude/hooks/activity-log\\.sh (pre|post|post-failure)$") | not)))
+          | map(select((.hooks // []) | length > 0))
+        );
+    def add_ours(key; phase):
+      .hooks[key] += [{
+        matcher: ".*",
+        hooks: [{ type: "command", command: ($hooks_link + "/activity-log.sh " + phase) }]
+      }];
+    .hooks //= {}
+    | strip_ours("PreToolUse")
+    | strip_ours("PostToolUse")
+    | strip_ours("PostToolUseFailure")
+    | add_ours("PreToolUse"; "pre")
+    | add_ours("PostToolUse"; "post")
+    | add_ours("PostToolUseFailure"; "post-failure")
+  ' > "$settings_tmp"; then
+    rm -f "$settings_tmp"
+    echo "  Warning: jq failed to merge the Claude activity-log hooks into"
+    echo "           $USER_SETTINGS. Inspect your jq install and re-run setup"
+    echo "           when convenient. The rest of the agentic rig is"
+    echo "           unaffected."
+    return 0
+  fi
+
+  if [ ! -s "$settings_tmp" ]; then
+    rm -f "$settings_tmp"
+    echo "  Warning: jq produced empty output. Refusing to overwrite"
+    echo "           $USER_SETTINGS. The rest of the agentic rig is"
+    echo "           unaffected."
+    return 0
+  fi
+
+  # Preserve a dotfiles-managed symlink. If $USER_SETTINGS is a symlink
+  # (chezmoi, stow, yadm, home-manager etc), `mv` would replace the link
+  # with a regular file and future dotfiles updates would stop reaching
+  # Claude Code. Write atomically to a sibling tempfile next to the
+  # symlink's actual target, then `mv` onto the target. A plain
+  # `cat > "$USER_SETTINGS"` would truncate the real file BEFORE the
+  # write completes, leaving an empty / partial settings.json if the
+  # write is interrupted (disk full, signal) and breaking Claude Code
+  # until a manual fix.
+  if [ -L "$USER_SETTINGS" ]; then
+    local link_target
+    local real_target
+    local real_dir
+    local real_tmp=""
+    link_target="$(readlink "$USER_SETTINGS")"
+    case "$link_target" in
+      /*) real_target="$link_target" ;;
+      *)  real_target="$(dirname "$USER_SETTINGS")/$link_target" ;;
+    esac
+    real_dir="$(dirname "$real_target")"
+    # setup.sh runs under `set -e`. A bare `real_tmp="$(mktemp ...)"`
+    # would terminate the whole script if mktemp failed (read-only
+    # target directory, out of inodes), bypassing the warn-and-continue
+    # path intended by install_activity_log_hooks(). `|| true` keeps
+    # the assignment non-fatal; the following empty-value check then
+    # handles it with the standard soft-fail warning.
+    real_tmp="$(mktemp "${real_dir}/settings.json.XXXXXX" 2>/dev/null)" || true
+    if [ -z "$real_tmp" ]; then
+      rm -f "$settings_tmp"
+      echo "  Warning: could not create a tempfile next to the symlink"
+      echo "           target $real_target. Activity-log hooks not merged;"
+      echo "           rest of the agentic rig is unaffected."
+      return 0
+    fi
+    if ! cat "$settings_tmp" > "$real_tmp"; then
+      rm -f "$real_tmp" "$settings_tmp"
+      echo "  Warning: failed to write $real_tmp. Activity-log hooks not"
+      echo "           merged; rest of the agentic rig is unaffected."
+      return 0
+    fi
+    # Final mv wrapped in the same soft-fail shape as every other step
+    # above. Under setup.sh's `set -e`, a bare mv would terminate the
+    # entire script on failure (target FS full, permissions removed
+    # mid-run) and leak both tempfiles. Explicit guard: clean up and
+    # return 0 so the "Setup complete" message still prints.
+    if ! mv "$real_tmp" "$real_target"; then
+      rm -f "$real_tmp" "$settings_tmp"
+      echo "  Warning: failed to mv $real_tmp onto $real_target."
+      echo "           Activity-log hooks not merged; rest of the agentic"
+      echo "           rig is unaffected."
+      return 0
+    fi
+    rm -f "$settings_tmp"
+  else
+    # Same soft-fail wrapper as the symlink branch above. Under
+    # setup.sh's `set -e`, a bare mv terminates the whole script if
+    # it fails (target read-only, FS full, permissions changed
+    # mid-run); wrap so the user gets a warning and the rest of
+    # setup proceeds.
+    if ! mv "$settings_tmp" "$USER_SETTINGS"; then
+      rm -f "$settings_tmp"
+      echo "  Warning: failed to mv $settings_tmp onto $USER_SETTINGS."
+      echo "           Activity-log hooks not merged; rest of the agentic"
+      echo "           rig is unaffected."
+      return 0
+    fi
+  fi
+  echo "  Activity-log hooks merged into: $USER_SETTINGS"
+}
+
+echo "Installing Claude activity-log hooks..."
+install_activity_log_hooks
+echo ""
+
+# Pre-flight check for the Claude activity-log hook (schemas/activity_log.md).
+# Non-fatal. The hook itself is best-effort and exits 0 on missing tooling,
+# but warning here tells a new install why no entries will land until they
+# fix it.
+#
+# Checks the CLI-auth store (`gcloud auth list`), not ADC. The hook writes
+# via `gcloud logging write`, which authenticates using the active CLI
+# account; checking ADC here would mask the case where ADC is configured
+# but no CLI account is active (writes would silently fail).
+echo "Checking Claude activity-log hook prerequisites..."
+if ! command -v gcloud >/dev/null 2>&1; then
+  echo "  Warning: gcloud is not on PATH. The Claude activity-log hook will"
+  echo "           silently skip every write until gcloud is installed and"
+  echo "           authenticated against the wiser-mainframe project."
+elif ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q .; then
+  echo "  Warning: no active gcloud account. Run 'gcloud auth login' before"
+  echo "           the Claude activity-log hook can write. The hook passes"
+  echo "           --project=wiser-mainframe explicitly."
+else
+  gcloud_project="$(gcloud config get-value project 2>/dev/null || true)"
+  if [ "$gcloud_project" != "wiser-mainframe" ]; then
+    echo "  Note: gcloud default project is '$gcloud_project', not 'wiser-mainframe'."
+    echo "        The hook passes --project=wiser-mainframe explicitly so writes"
+    echo "        still land; worth switching the default to avoid confusion"
+    echo "        when debugging unrelated gcloud commands."
+  else
+    echo "  gcloud auth + project: OK"
+  fi
+
+  # Real-write probe. The preflight above only confirms that a gcloud
+  # account is active and that the project is wiser-mainframe; it does
+  # NOT confirm that this account holds roles/logging.logEntries.create
+  # on wiser-mainframe. Without that role, every runtime write fails
+  # PERMISSION_DENIED silently (the hook discards gcloud's stderr by
+  # design, so there's no mid-session signal), and the audit log that
+  # guardrails sections 5.3 and 11 depend on stays empty while
+  # everyone assumes it works. One probe write here surfaces the gap
+  # at install time.
+  #
+  # The probe writes to a DIFFERENT Cloud Logging log
+  # (`devl-claude-agent-setup-probe`, auto-created on first write)
+  # rather than the audit log. roles/logging.logWriter grants write
+  # to all logs in the project, so the probe exercises the same role
+  # binding without putting a schema-off record into the pinned v1
+  # audit stream (`devl-claude-agent-activity`, schema in
+  # schemas/activity_log.md). Actor uses $USER (same fallback the
+  # runtime hook uses for cold cache) to avoid duplicating the
+  # authenticated writer identity as the gcloud-account email, which
+  # the schema's actor contract explicitly forbids.
+  probe_actor="${USER:-unknown}"
+  # Build the JSON payload via jq --arg rather than printf-splicing
+  # $USER into a literal template. A `"` or `\` in $USER would
+  # otherwise produce malformed JSON, gcloud would reject the write,
+  # and the probe would report a permissions failure that masks the
+  # real credential status. activity-log.sh builds its payload the
+  # same way for the same reason. jq is a hard prerequisite of the
+  # hook (install_activity_log_hooks above skips installation when
+  # jq is missing), so skip the probe when jq is absent and point
+  # the user at the right fix.
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  Skipping gcloud logging write probe: jq not on PATH. Install"
+    echo "           jq (brew install jq / apt install jq) and re-run"
+    echo "           setup.sh; the runtime hook also needs jq to parse"
+    echo "           Claude's hook input."
+  else
+    probe_payload="$(jq -nc \
+      --arg actor "$probe_actor" \
+      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg link "setup.sh" \
+      --arg source "setup_probe" \
+      '{actor: $actor, timestamp: $timestamp, link: $link, source: $source}')"
+    probe_error="$(gcloud logging write devl-claude-agent-setup-probe "$probe_payload" \
+      --payload-type=json \
+      --severity=INFO \
+      --project=wiser-mainframe 2>&1 >/dev/null)" || probe_failed=1
+    if [ -n "${probe_failed:-}" ]; then
+      echo "  Warning: test write to log 'devl-claude-agent-setup-probe' on"
+      echo "           wiser-mainframe failed. The runtime hook will silently"
+      echo "           drop every write. Usually means the active account"
+      echo "           lacks roles/logging.logEntries.create on wiser-mainframe."
+      echo "           gcloud said:"
+      echo "             $probe_error"
+    else
+      echo "  gcloud logging write probe: OK"
+    fi
+  fi
 fi
 
 echo ""

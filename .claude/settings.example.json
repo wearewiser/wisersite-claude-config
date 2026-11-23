@@ -1,0 +1,29 @@
+{
+  "_comment": "Reference shape only. Claude Code does not load this file (the loader is scoped to settings.json / settings.local.json). setup.sh merges the three hook entries below into ~/.claude/settings.json so they fire in every Claude Code session on this machine regardless of the session's cwd, which is the only location Claude Code discovers from an arbitrary project. The hook itself is a no-op outside Wiser repos (it extracts WP23-NNN from the current git branch and exits 0 silently if there is no match). Replace <HOME> with your real home path if you merge these entries in manually.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "<HOME>/Projects/Wiser/.claude/hooks/activity-log.sh pre" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "<HOME>/Projects/Wiser/.claude/hooks/activity-log.sh post" }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          { "type": "command", "command": "<HOME>/Projects/Wiser/.claude/hooks/activity-log.sh post-failure" }
+        ]
+      }
+    ]
+  }
+}
